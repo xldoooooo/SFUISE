@@ -1,3 +1,3 @@
 std_msgs/Header header
-int32 deltaX
-int32 deltaY
+int32 delta_x
+int32 delta_y

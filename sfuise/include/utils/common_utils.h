@@ -1,13 +1,13 @@
 #pragma once
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Dense>
 #include <deque>
 #include <map>
 #include <unordered_map>
 #include <vector>
-#include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 namespace Eigen {
 
@@ -84,22 +84,22 @@ class CommonUtils
 {
 public:
     template <typename T>
-    static T readParam(ros::NodeHandle &nh, std::string name)
+    static T readParam(rclcpp::Node::SharedPtr node, std::string name)
     {
         T ans;
-        if (!nh.getParam(name, ans))
+        if (!node->get_parameter(name, ans))
         {
-            ROS_ERROR_STREAM("Failed to load " << name);
-            nh.shutdown();
+            RCLCPP_ERROR_STREAM(node->get_logger(), "Failed to load " << name);
+            rclcpp::shutdown();
         }
         return ans;
     }
 
-    static geometry_msgs::PoseStamped pose2msg(const int64_t t, const Eigen::Vector3d& pos,
+    static geometry_msgs::msg::PoseStamped pose2msg(const int64_t t, const Eigen::Vector3d& pos,
                                               const Eigen::Quaterniond& orient)
     {
-        geometry_msgs::PoseStamped msg;
-        msg.header.stamp.fromNSec(t);
+        geometry_msgs::msg::PoseStamped msg;
+        msg.header.stamp = rclcpp::Time(t);
         msg.pose.position.x = pos.x();
         msg.pose.position.y = pos.y();
         msg.pose.position.z = pos.z();

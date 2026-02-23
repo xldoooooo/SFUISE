@@ -1,4 +1,4 @@
 std_msgs/Header header
-int32 idA
-int32 idB
+int32 id_a
+int32 id_b
 float32 data

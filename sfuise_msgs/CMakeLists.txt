@@ -1,23 +1,25 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(sfuise_msgs)
 
-find_package(catkin REQUIRED message_generation std_msgs geometry_msgs)
+# 清除 ROS1 catkin 遗留变量，避免未使用变量警告
+if(DEFINED CATKIN_INSTALL_INTO_PREFIX_ROOT)
+  set(_unused_catkin_var "${CATKIN_INSTALL_INTO_PREFIX_ROOT}")
+  unset(CATKIN_INSTALL_INTO_PREFIX_ROOT CACHE)
+endif()
 
-add_message_files(
-	FILES
-	Spline.msg
-	Knot.msg
-	Calib.msg
-	Offset.msg
-	Estimate.msg
+find_package(ament_cmake REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/Spline.msg"
+  "msg/Knot.msg"
+  "msg/Calib.msg"
+  "msg/Offset.msg"
+  "msg/Estimate.msg"
+  DEPENDENCIES geometry_msgs
 )
 
-generate_messages(
- DEPENDENCIES
- geometry_msgs
-)
-
-catkin_package(
-  CATKIN_DEPENDS message_runtime
-)
+ament_package()
 

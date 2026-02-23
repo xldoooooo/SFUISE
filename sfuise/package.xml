@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
   <name>sfuise</name>
   <version>0.0.0</version>
   
@@ -9,15 +9,19 @@
   <author email="kailai.li@liu.se">Kailai Li</author>
   <author email="ziyu.cao@kit.com">Ziyu Cao</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
-  <depend>roscpp</depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>message_generation</depend>
-  <depend>message_runtime</depend>
+  <depend>visualization_msgs</depend>
   <depend>cf_msgs</depend>
   <depend>isas_msgs</depend>
   <depend>sfuise_msgs</depend>
+  
+  <build_depend>eigen3-dev</build_depend>
+  <build_depend>libblas-dev</build_depend>
+  <build_depend>liblapack-dev</build_depend>
 </package>

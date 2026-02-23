@@ -1,8 +1,10 @@
 #pragma once
 
-#include <ros/ros.h>
-#include <std_msgs/ColorRGBA.h>
-#include <visualization_msgs/Marker.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/color_rgba.hpp>
+#include <std_msgs/msg/header.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <geometry_msgs/msg/point.hpp>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
@@ -20,13 +22,15 @@ public:
         line_color.a = a;
     }
 
-    void pubPose(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, ros::Publisher& pub, const std_msgs::Header& header)
+    void pubPose(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, 
+                 rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub, 
+                 const std_msgs::msg::Header& header)
     {
-        visualization_msgs::Marker marker;
+        visualization_msgs::msg::Marker marker;
         marker.header = header;
         marker.id = 0;
-        marker.type = visualization_msgs::Marker::LINE_STRIP;
-        marker.action = visualization_msgs::Marker::ADD;
+        marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::msg::Marker::ADD;
         marker.scale.x = line_width;
         marker.pose.position.x = 0.0;
         marker.pose.position.y = 0.0;
@@ -35,7 +39,7 @@ public:
         marker.pose.orientation.x = 0.0;
         marker.pose.orientation.y = 0.0;
         marker.pose.orientation.z = 0.0;
-        geometry_msgs::Point pt_lt, pt_lb, pt_rt, pt_rb, pt_oc, pt_lt0, pt_lt1, pt_lt2;
+        geometry_msgs::msg::Point pt_lt, pt_lb, pt_rt, pt_rb, pt_oc, pt_lt0, pt_lt1, pt_lt2;
         eigen2Point(q * (scale * imlt) + p, pt_lt);
         eigen2Point(q * (scale * imlb) + p, pt_lb);
         eigen2Point(q * (scale * imrt) + p, pt_rt);
@@ -84,12 +88,12 @@ public:
         marker.points.push_back(pt_oc);
         marker.colors.push_back(line_color);
         marker.colors.push_back(line_color);
-        pub.publish(marker);
+        pub->publish(marker);
     }
 
 private:
 
-    std_msgs::ColorRGBA line_color;
+    std_msgs::msg::ColorRGBA line_color;
     double scale;
     double line_width;
     static const Eigen::Vector3d imlt;
@@ -101,7 +105,7 @@ private:
     static const Eigen::Vector3d lt1;
     static const Eigen::Vector3d lt2;
 
-    void eigen2Point(const Eigen::Vector3d& v, geometry_msgs::Point& p)
+    void eigen2Point(const Eigen::Vector3d& v, geometry_msgs::msg::Point& p)
     {
         p.x = v.x();
         p.y = v.y();

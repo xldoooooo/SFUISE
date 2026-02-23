@@ -1,23 +1,24 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(isas_msgs)
 
-find_package(catkin REQUIRED message_generation std_msgs geometry_msgs)
+# 清除 ROS1 catkin 遗留变量，避免未使用变量警告
+if(DEFINED CATKIN_INSTALL_INTO_PREFIX_ROOT)
+  set(_unused_catkin_var "${CATKIN_INSTALL_INTO_PREFIX_ROOT}")
+  unset(CATKIN_INSTALL_INTO_PREFIX_ROOT CACHE)
+endif()
 
-add_message_files(
-  FILES
-  RTLSRange.msg
-  RTLSStick.msg
-  AnchorPosition.msg
-  Anchorlist.msg
+find_package(ament_cmake REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/RTLSRange.msg"
+  "msg/RTLSStick.msg"
+  "msg/AnchorPosition.msg"
+  "msg/Anchorlist.msg"
+  DEPENDENCIES std_msgs geometry_msgs
 )
 
-generate_messages(
- DEPENDENCIES
- std_msgs
- geometry_msgs
-)
-
-catkin_package(
-  CATKIN_DEPENDS std_msgs message_runtime
-)
+ament_package()
 

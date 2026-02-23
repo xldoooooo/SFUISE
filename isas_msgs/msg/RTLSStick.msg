@@ -1,4 +1,4 @@
-Header header
+std_msgs/Header header
 uint16 id
 uint32 t # timestamp in ms since the modul is turned on
 geometry_msgs/Point pos # current position

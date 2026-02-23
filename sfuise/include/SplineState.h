@@ -2,8 +2,8 @@
 
 #include "utils/common_utils.h"
 #include "utils/math_tools.h"
-#include "sfuise_msgs/Spline.h"
-#include "sfuise_msgs/Knot.h"
+#include "sfuise_msgs/msg/spline.hpp"
+#include "sfuise_msgs/msg/knot.hpp"
 
 template <class MatT>
 struct JacobianStruct {
@@ -384,13 +384,13 @@ class SplineState
         }
     }
 
-    void getSplineMsg(sfuise_msgs::Spline& spline_msg)
+    void getSplineMsg(sfuise_msgs::msg::Spline& spline_msg)
     {
         spline_msg.dt = dt_ns;
         spline_msg.start_t = start_t_ns;
         spline_msg.start_idx = start_i;
         for (size_t i = 0; i < num_knot; i++) {
-            sfuise_msgs::Knot knot_msg;
+            sfuise_msgs::msg::Knot knot_msg;
             knot_msg.position.x = t_knots[i].x();
             knot_msg.position.y = t_knots[i].y();
             knot_msg.position.z = t_knots[i].z();
@@ -408,7 +408,7 @@ class SplineState
             spline_msg.knots.push_back(knot_msg);
         }
         for (int i = 0; i < 3; i++) {
-            sfuise_msgs::Knot idle_msg;
+            sfuise_msgs::msg::Knot idle_msg;
             idle_msg.position.x = t_idle[i].x();
             idle_msg.position.y = t_idle[i].y();
             idle_msg.position.z = t_idle[i].z();

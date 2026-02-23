@@ -1,33 +1,25 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(cf_msgs)
 
-find_package(catkin REQUIRED message_generation std_msgs)
+# 清除 ROS1 catkin 遗留变量，避免未使用变量警告
+if(DEFINED CATKIN_INSTALL_INTO_PREFIX_ROOT)
+  set(_unused_catkin_var "${CATKIN_INSTALL_INTO_PREFIX_ROOT}")
+  unset(CATKIN_INSTALL_INTO_PREFIX_ROOT CACHE)
+endif()
 
+find_package(ament_cmake REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
-add_message_files(
-  FILES
-  Gyro.msg
-  Accel.msg
-  Tdoa.msg
-  Twr.msg
-  Tof.msg
-  Baro.msg
-  Flow.msg
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/Gyro.msg"
+  "msg/Accel.msg"
+  "msg/Tdoa.msg"
+  "msg/Twr.msg"
+  "msg/Tof.msg"
+  "msg/Baro.msg"
+  "msg/Flow.msg"
+  DEPENDENCIES std_msgs
 )
 
-generate_messages(
-   DEPENDENCIES
-   std_msgs  # Or other packages containing msgs
-)
-
-catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES cf_msgs
-  CATKIN_DEPENDS std_msgs message_runtime
-#  DEPENDS system_lib
-)
-
-include_directories(
-# include
-# ${catkin_INCLUDE_DIRS}
-)
+ament_package()

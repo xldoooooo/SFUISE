@@ -1,41 +1,50 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
+#include <thread>
 #include "../include/Linearizer.h"
 #include "../include/Accumulator.h"
 #include "../include/utils/tic_toc.h"
-#include "std_msgs/Int64.h"
-#include "sensor_msgs/Imu.h"
-#include "cf_msgs/Tdoa.h"
-#include "sensor_msgs/PointCloud.h"
-#include "isas_msgs/Anchorlist.h"
-#include "isas_msgs/RTLSStick.h"
-#include "sfuise_msgs/Calib.h"
-#include "sfuise_msgs/Spline.h"
-#include "sfuise_msgs/Estimate.h"
+#include "std_msgs/msg/int64.hpp"
+#include "sensor_msgs/msg/imu.hpp"
+#include "cf_msgs/msg/tdoa.hpp"
+#include "sensor_msgs/msg/point_cloud.hpp"
+#include "isas_msgs/msg/anchorlist.hpp"
+#include "isas_msgs/msg/rtls_stick.hpp"
+#include "sfuise_msgs/msg/calib.hpp"
+#include "sfuise_msgs/msg/spline.hpp"
+#include "sfuise_msgs/msg/estimate.hpp"
 
-class SplineFusion
+class SplineFusion : public rclcpp::Node
 {
 
   public:
 
-    SplineFusion(ros::NodeHandle& nh)
+    SplineFusion() : rclcpp::Node("SplineFusion")
     {
         if_anchor_ini = false;
         average_runtime = 0;
         window_count = 0;
         solver_flag = INITIAL;
-        readParameters(nh);
-        sub_imu = nh.subscribe("/EstimationInterface/imu_ds", 1000, &SplineFusion::getImuCallback, this);
-        sub_anchor = nh.subscribe("/EstimationInterface/anchor_list", 1000, &SplineFusion::getAnchorCallback, this);
+        readParameters();
+        sub_imu = this->create_subscription<sensor_msgs::msg::Imu>(
+            "/EstimationInterface/imu_ds", 1000, 
+            std::bind(&SplineFusion::getImuCallback, this, std::placeholders::_1));
+        sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
+            "/EstimationInterface/anchor_list", 1000, 
+            std::bind(&SplineFusion::getAnchorCallback, this, std::placeholders::_1));
         if (if_tdoa) {
-            sub_uwb = nh.subscribe("/EstimationInterface/tdoa_ds", 1000, &SplineFusion::getTdoaCallback, this);
+            sub_uwb = this->create_subscription<cf_msgs::msg::Tdoa>(
+                "/EstimationInterface/tdoa_ds", 1000, 
+                std::bind(&SplineFusion::getTdoaCallback, this, std::placeholders::_1));
         } else {
-            sub_uwb = nh.subscribe("/EstimationInterface/toa_ds", 1000, &SplineFusion::getToaCallback, this);
+            sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
+                "/EstimationInterface/toa_ds", 1000, 
+                std::bind(&SplineFusion::getToaCallback, this, std::placeholders::_1));
         }
-        pub_knots_active = nh.advertise<sensor_msgs::PointCloud>("active_control_points", 1000);
-        pub_knots_inactive = nh.advertise<sensor_msgs::PointCloud>("inactive_control_points", 1000);
-        pub_calib = nh.advertise<sfuise_msgs::Calib>("sys_calib", 100);
-        pub_est = nh.advertise<sfuise_msgs::Estimate>("est_window", 1000);
-        pub_start_time = nh.advertise<std_msgs::Int64>("start_time", 1000);
+        pub_knots_active = this->create_publisher<sensor_msgs::msg::PointCloud>("active_control_points", 1000);
+        pub_knots_inactive = this->create_publisher<sensor_msgs::msg::PointCloud>("inactive_control_points", 1000);
+        pub_calib = this->create_publisher<sfuise_msgs::msg::Calib>("sys_calib", 100);
+        pub_est = this->create_publisher<sfuise_msgs::msg::Estimate>("est_window", 1000);
+        pub_start_time = this->create_publisher<std_msgs::msg::Int64>("start_time", 1000);
     }
 
     void run()
@@ -49,7 +58,7 @@ class SplineFusion
             average_runtime = (t_consum + double(num_window) * average_runtime) / double (num_window + 1);
             num_window++;
             if ((int) window_count <= n_window_calib) {
-                sfuise_msgs::Calib calib_msg;
+                sfuise_msgs::msg::Calib calib_msg;
                 calib_msg.q_nav_uwb.w = calib_param.q_nav_uwb.w();
                 calib_msg.q_nav_uwb.x = calib_param.q_nav_uwb.x();
                 calib_msg.q_nav_uwb.y = calib_param.q_nav_uwb.y();
@@ -57,12 +66,12 @@ class SplineFusion
                 calib_msg.t_nav_uwb.x = calib_param.t_nav_uwb[0];
                 calib_msg.t_nav_uwb.y = calib_param.t_nav_uwb[1];
                 calib_msg.t_nav_uwb.z = calib_param.t_nav_uwb[2];
-                geometry_msgs::Point offset_msg;
+                geometry_msgs::msg::Point offset_msg;
                 offset_msg.x = calib_param.offset.x();
                 offset_msg.y = calib_param.offset.y();
                 offset_msg.z = calib_param.offset.z();
                 calib_msg.t_tag_body_set = offset_msg;
-                pub_calib.publish(calib_msg);
+                pub_calib->publish(calib_msg);
             }
             if (spline_local.numKnots() >= (size_t) window_size) {
                 window_count++;
@@ -70,13 +79,13 @@ class SplineFusion
                     solver_flag = FULLSIZE;
                 }
             }
-            sfuise_msgs::Spline spline_msg;
+            sfuise_msgs::msg::Spline spline_msg;
             spline_local.getSplineMsg(spline_msg);
-            sfuise_msgs::Estimate est_msg;
+            sfuise_msgs::msg::Estimate est_msg;
             est_msg.spline = spline_msg;
             est_msg.if_full_window.data = (solver_flag != INITIAL);
             est_msg.runtime.data = average_runtime;
-            pub_est.publish(est_msg);
+            pub_est->publish(est_msg);
             displayControlPoints();
             if (solver_flag == FULLSIZE) spline_local.removeOneOldState();
         }
@@ -88,14 +97,14 @@ class SplineFusion
 
     static constexpr double NS_TO_S = 1e-9;
 
-    ros::Subscriber sub_imu;
-    ros::Subscriber sub_anchor;
-    ros::Subscriber sub_uwb;
-    ros::Publisher pub_knots_active;
-    ros::Publisher pub_knots_inactive;
-    ros::Publisher pub_calib;
-    ros::Publisher pub_est;
-    ros::Publisher pub_start_time;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu;
+    rclcpp::Subscription<isas_msgs::msg::Anchorlist>::SharedPtr sub_anchor;
+    rclcpp::SubscriptionBase::SharedPtr sub_uwb;  // 支持多种 UWB 消息类型
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud>::SharedPtr pub_knots_active;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud>::SharedPtr pub_knots_inactive;
+    rclcpp::Publisher<sfuise_msgs::msg::Calib>::SharedPtr pub_calib;
+    rclcpp::Publisher<sfuise_msgs::msg::Estimate>::SharedPtr pub_est;
+    rclcpp::Publisher<std_msgs::msg::Int64>::SharedPtr pub_start_time;
 
     Parameters param;
     CalibParam calib_param;
@@ -137,72 +146,71 @@ class SplineFusion
     double average_runtime;
     std::vector<double> v_toa_offset;
 
-    void readParameters(ros::NodeHandle& nh)
+    void readParameters()
     {
-        if (CommonUtils::readParam<double>(nh, "imu_sample_coeff")==0) {
+        if (this->declare_parameter<double>("imu_sample_coeff", 1.0) == 0) {
             if_uwb_only = true;
         } else {
             if_uwb_only = false;
         }
         param.if_opt_g = true;
         param.if_opt_transform = true;
-        param.w_uwb = CommonUtils::readParam<double>(nh, "w_uwb");
-        max_iter = CommonUtils::readParam<int>(nh, "max_iter");
-        dt_ns = 1e9 / CommonUtils::readParam<int>(nh, "control_point_fps");
-        if_tdoa = CommonUtils::readParam<bool>(nh, "if_tdoa");
+        param.w_uwb = this->declare_parameter<double>("w_uwb", 1.0);
+        max_iter = this->declare_parameter<int>("max_iter", 20);
+        dt_ns = 1e9 / this->declare_parameter<int>("control_point_fps", 100);
+        if_tdoa = this->declare_parameter<bool>("if_tdoa", true);
         bag_start_time = 0;
-        n_window_calib = CommonUtils::readParam<int>(nh, "n_window_calib");
-        window_size = CommonUtils::readParam<int>(nh, "window_size");
+        n_window_calib = this->declare_parameter<int>("n_window_calib", 50);
+        window_size = this->declare_parameter<int>("window_size", 10);
         if (n_window_calib == 0) {
-            ROS_ERROR_STREAM("n_window_calib cannot be set 0.");
+            RCLCPP_ERROR(this->get_logger(), "n_window_calib cannot be set 0.");
             exit(1);
         } else {
             param.q_nav_uwb_init.setIdentity();
             param.t_nav_uwb_init.setZero();
         }
-        std::vector<double> accel_var_inv = CommonUtils::readParam<std::vector<double>>(nh, "accel_var_inv");
+        std::vector<double> accel_var_inv = this->declare_parameter<std::vector<double>>("accel_var_inv", std::vector<double>{1.0, 1.0, 1.0});
         param.accel_var_inv << accel_var_inv.at(0), accel_var_inv.at(1), accel_var_inv.at(2);
-        std::vector<double> bias_accel_var_inv = CommonUtils::readParam<std::vector<double>>(nh, "bias_accel_var_inv");
+        std::vector<double> bias_accel_var_inv = this->declare_parameter<std::vector<double>>("bias_accel_var_inv", std::vector<double>{1.0, 1.0, 1.0});
         param.bias_accel_var_inv << bias_accel_var_inv.at(0), bias_accel_var_inv.at(1), bias_accel_var_inv.at(2);
-        param.w_acc = CommonUtils::readParam<double>(nh, "w_accel");
-        param.w_bias_acc = CommonUtils::readParam<double>(nh, "w_bias_accel");
-        std::vector<double> gyro_var_inv = CommonUtils::readParam<std::vector<double>>(nh, "gyro_var_inv");
+        param.w_acc = this->declare_parameter<double>("w_accel", 1.0);
+        param.w_bias_acc = this->declare_parameter<double>("w_bias_accel", 1.0);
+        std::vector<double> gyro_var_inv = this->declare_parameter<std::vector<double>>("gyro_var_inv", std::vector<double>{1.0, 1.0, 1.0});
         param.gyro_var_inv << gyro_var_inv.at(0), gyro_var_inv.at(1), gyro_var_inv.at(2);
-        std::vector<double> bias_gyro_var_inv = CommonUtils::readParam<std::vector<double>>(nh, "bias_gyro_var_inv");
+        std::vector<double> bias_gyro_var_inv = this->declare_parameter<std::vector<double>>("bias_gyro_var_inv", std::vector<double>{1.0, 1.0, 1.0});
         param.bias_gyro_var_inv << bias_gyro_var_inv.at(0), bias_gyro_var_inv.at(1), bias_gyro_var_inv.at(2);
-        param.w_gyro = CommonUtils::readParam<double>(nh, "w_gyro");
-        param.w_bias_gyro = CommonUtils::readParam<double>(nh, "w_bias_gyro");
-        param.if_reject_uwb = CommonUtils::readParam<bool>(nh, "if_reject_uwb");
+        param.w_gyro = this->declare_parameter<double>("w_gyro", 1.0);
+        param.w_bias_gyro = this->declare_parameter<double>("w_bias_gyro", 1.0);
+        param.if_reject_uwb = this->declare_parameter<bool>("if_reject_uwb", false);
         if (param.if_reject_uwb) {
-            param.reject_uwb_thresh = CommonUtils::readParam<double>(nh, "reject_uwb_thresh");
-            param.reject_uwb_window_width = CommonUtils::readParam<double>(nh, "reject_uwb_window_width");
+            param.reject_uwb_thresh = this->declare_parameter<double>("reject_uwb_thresh", 1.0);
+            param.reject_uwb_window_width = this->declare_parameter<double>("reject_uwb_window_width", 1.0);
         }
-        std::vector<double> v_offset;
-        nh.getParam("offset", v_offset);
+        std::vector<double> v_offset = this->declare_parameter<std::vector<double>>("offset", std::vector<double>{0.0, 0.0, 0.0});
         calib_param.offset = Eigen::Vector3d(v_offset.at(0), v_offset.at(1), v_offset.at(2));
         if (!if_tdoa) {
-            v_toa_offset = CommonUtils::readParam<std::vector<double>>(nh, "toa_offset");
+            v_toa_offset = this->declare_parameter<std::vector<double>>("toa_offset", std::vector<double>{});
         }
     }
 
-    void getImuCallback(const sensor_msgs::ImuConstPtr& imu_msg)
+    void getImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu_msg)
     {
-        int64_t t_ns = imu_msg->header.stamp.toNSec();
+        int64_t t_ns = imu_msg->header.stamp.sec * (int64_t)1e9 + imu_msg->header.stamp.nanosec;
         Eigen::Vector3d acc(imu_msg->linear_acceleration.x, imu_msg->linear_acceleration.y, imu_msg->linear_acceleration.z);
         Eigen::Vector3d gyro(imu_msg->angular_velocity.x, imu_msg->angular_velocity.y, imu_msg->angular_velocity.z);
         ImuData imu(t_ns, gyro, acc);
         imu_buff.push_back(imu);
     }
 
-    void getTdoaCallback(const cf_msgs::Tdoa::ConstPtr& msg)
+    void getTdoaCallback(const cf_msgs::msg::Tdoa::SharedPtr msg)
     {
-        TDOAData uwb(msg->header.stamp.toNSec(), msg->idA, msg->idB, msg->data);
+        TDOAData uwb(msg->header.stamp.sec * (int64_t)1e9 + msg->header.stamp.nanosec, msg->id_a, msg->id_b, msg->data);
         tdoa_buff.push_back(uwb);
     }
 
-    void getToaCallback(const isas_msgs::RTLSStick::ConstPtr& uwb_msg)
+    void getToaCallback(const isas_msgs::msg::RTLSStick::SharedPtr uwb_msg)
     {
-        int64_t t_ns = uwb_msg->header.stamp.toNSec();
+        int64_t t_ns = uwb_msg->header.stamp.sec * (int64_t)1e9 + uwb_msg->header.stamp.nanosec;
         for (const auto& rg : uwb_msg->ranges) {
             if (rg.ra == 0) continue;
             TOAData uwb(t_ns, rg.id, rg.range);
@@ -210,7 +218,7 @@ class SplineFusion
         }
     }
 
-    void getAnchorCallback(const isas_msgs::Anchorlist::ConstPtr& anchor_msg)
+    void getAnchorCallback(const isas_msgs::msg::Anchorlist::SharedPtr anchor_msg)
     {
         if (if_anchor_ini) return;
         for (const auto& anchor : anchor_msg->anchor) {
@@ -276,7 +284,7 @@ class SplineFusion
                         pos_ini = tdoaMultilateration(next_knot_TimeNs * NS_TO_S);
                         q_ini  = Eigen::Quaterniond::Identity();
                     } else {
-                        ROS_ERROR_STREAM("UWB-only tracking only supported for TDOA data!");
+                        RCLCPP_ERROR(this->get_logger(), "UWB-only tracking only supported for TDOA data!");
                         exit(1);
                     }
                 }
@@ -290,9 +298,9 @@ class SplineFusion
         } else {
             if (!param_set) {
                 param_set = setParameters();
-                std_msgs::Int64 start_time;
+                std_msgs::msg::Int64 start_time;
                 start_time.data = bag_start_time;
-                pub_start_time.publish(start_time);
+                pub_start_time->publish(start_time);
             }
             if (param_set && if_anchor_ini) {
                 spline_local.init(dt_ns, 0, bag_start_time);
@@ -515,25 +523,30 @@ class SplineFusion
 
     void displayControlPoints()
     {
-        sensor_msgs::PointCloud points_inactive_msg;
+        sensor_msgs::msg::PointCloud points_inactive_msg;
         points_inactive_msg.header.frame_id = "map";
-        points_inactive_msg.header.stamp.fromNSec(spline_local.minTimeNs());
+        auto now = std::chrono::system_clock::now();
+        points_inactive_msg.header.stamp.sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        points_inactive_msg.header.stamp.nanosec = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch() % std::chrono::seconds(1)).count();
         points_inactive_msg.points.push_back(getPointMsg(spline_local.getIdlePos(0)));
         points_inactive_msg.points.push_back(getPointMsg(spline_local.getIdlePos(1)));
         points_inactive_msg.points.push_back(getPointMsg(spline_local.getIdlePos(2)));
-        sensor_msgs::PointCloud points_active_msg;
+        sensor_msgs::msg::PointCloud points_active_msg;
         points_active_msg.header.frame_id = "map";
-        points_active_msg.header.stamp.fromNSec(spline_local.minTimeNs());
+        points_active_msg.header.stamp.sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        points_active_msg.header.stamp.nanosec = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch() % std::chrono::seconds(1)).count();
         for (size_t i = 0; i < spline_local.numKnots(); i++) {
             points_active_msg.points.push_back(getPointMsg(spline_local.getKnotPos(i)));
         }
-        pub_knots_inactive.publish(points_inactive_msg);
-        pub_knots_active.publish(points_active_msg);
+        pub_knots_inactive->publish(points_inactive_msg);
+        pub_knots_active->publish(points_active_msg);
     }
 
-    geometry_msgs::Point32 getPointMsg(Eigen::Vector3d p)
+    geometry_msgs::msg::Point32 getPointMsg(Eigen::Vector3d p)
     {
-        geometry_msgs::Point32 p_msg;
+        geometry_msgs::msg::Point32 p_msg;
         Eigen::Vector3d p_U = calib_param.q_nav_uwb * p + calib_param.t_nav_uwb;
         p_msg.x = p_U.x();
         p_msg.y = p_U.y();
@@ -643,15 +656,22 @@ class SplineFusion
 
 int main(int argc, char *argv[])
 {
-    ros::init(argc, argv, "sfuise");
-    ROS_INFO("\033[1;32m---->\033[0m Starting SplineFusion.");
-    ros::NodeHandle nh("~");
-    SplineFusion estimator(nh);
-    ros::Rate rate(1000);
-    while (ros::ok()) {
-        ros::spinOnce();
-        estimator.run();
-        rate.sleep();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<SplineFusion>();
+    RCLCPP_INFO(node->get_logger(), "\033[1;32m---->\033[0m Starting SplineFusion.");
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(node);
+    std::thread spinning_thread([&executor]() {
+        executor.spin();
+    });
+    
+    rclcpp::Rate loop_rate(1000);
+    while (rclcpp::ok()) {
+        node->run();
+        loop_rate.sleep();
     }
+    
+    rclcpp::shutdown();
+    spinning_thread.join();
     return 0;
 }
