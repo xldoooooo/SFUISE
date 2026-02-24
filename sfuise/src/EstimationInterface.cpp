@@ -11,6 +11,10 @@
 #include "isas_msgs/msg/rtls_stick.hpp"
 #include "isas_msgs/msg/anchor_position.hpp"
 #include "isas_msgs/msg/anchorlist.hpp"
+#include "fraunhofer_rtls_flare/msg/rtls_range.hpp"
+#include "fraunhofer_rtls_flare/msg/rtls_stick.hpp"
+#include "fraunhofer_rtls_flare/msg/anchor_position.hpp"
+#include "fraunhofer_rtls_flare/msg/anchorlist.hpp"
 #include "sensor_msgs/msg/point_cloud.hpp"
 #include "sfuise_msgs/msg/spline.hpp"
 #include "sfuise_msgs/msg/estimate.hpp"
@@ -36,19 +40,25 @@ class EstimationInterface : public rclcpp::Node
         sub_imu = this->create_subscription<sensor_msgs::msg::Imu>(
             imu_type, 400, 
             std::bind(&EstimationInterface::getImuCallback, this, std::placeholders::_1));
-        pub_imu = this->create_publisher<sensor_msgs::msg::Imu>("imu_ds", 400);
+        pub_imu = this->create_publisher<sensor_msgs::msg::Imu>("/EstimationInterface/imu_ds", 400);
         
         std::string uwb_type = this->declare_parameter<std::string>("topic_uwb", "");
         if (!uwb_type.compare("/tdoa_data")) {
             sub_uwb = this->create_subscription<cf_msgs::msg::Tdoa>(
                 uwb_type, 400, 
                 std::bind(&EstimationInterface::getTdoaUTILCallback, this, std::placeholders::_1));
-            pub_uwb_tdoa = this->create_publisher<cf_msgs::msg::Tdoa>("tdoa_ds", 400);
+            pub_uwb_tdoa = this->create_publisher<cf_msgs::msg::Tdoa>("/EstimationInterface/tdoa_ds", 400);
         } else if (!uwb_type.compare("/rtls_flares")) {
-            sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
-                uwb_type, 400, 
-                std::bind(&EstimationInterface::getToaISASCallback, this, std::placeholders::_1));
-            pub_uwb_toa = this->create_publisher<isas_msgs::msg::RTLSStick>("toa_ds", 400);
+            if (if_fraunhofer_msg) {
+                sub_uwb_fraunhofer = this->create_subscription<fraunhofer_rtls_flare::msg::RTLSStick>(
+                    uwb_type, 400,
+                    std::bind(&EstimationInterface::getToaFraunhoferCallback, this, std::placeholders::_1));
+            } else {
+                sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
+                    uwb_type, 400,
+                    std::bind(&EstimationInterface::getToaISASCallback, this, std::placeholders::_1));
+            }
+            pub_uwb_toa = this->create_publisher<isas_msgs::msg::RTLSStick>("/EstimationInterface/toa_ds", 400);
         } else {
             RCLCPP_ERROR(this->get_logger(), "Wrong UWB format!");
         }
@@ -56,16 +66,22 @@ class EstimationInterface : public rclcpp::Node
         std::string anchor_type = this->declare_parameter<std::string>("topic_anchor_list", "");
         if (!if_tdoa) {
             if (!anchor_type.compare("/anchor_list")) {
-                sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
-                    anchor_type, 400, 
-                    std::bind(&EstimationInterface::getAnchorListFromISASCallback, this, std::placeholders::_1));
+                if (if_fraunhofer_msg) {
+                    sub_anchor_fraunhofer = this->create_subscription<fraunhofer_rtls_flare::msg::Anchorlist>(
+                        anchor_type, 400,
+                        std::bind(&EstimationInterface::getAnchorListFromFraunhoferCallback, this, std::placeholders::_1));
+                } else {
+                    sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
+                        anchor_type, 400,
+                        std::bind(&EstimationInterface::getAnchorListFromISASCallback, this, std::placeholders::_1));
+                }
             } else {
                 RCLCPP_ERROR(this->get_logger(), "Anchor list not available!");
             }
         }
         
-        anchor_pos_pub = this->create_publisher<sensor_msgs::msg::PointCloud>("visualization_anchor", 1000);
-        anchor_pub = this->create_publisher<isas_msgs::msg::Anchorlist>("anchor_list", 1000);
+        anchor_pos_pub = this->create_publisher<sensor_msgs::msg::PointCloud>("/EstimationInterface/visualization_anchor", 1000);
+        anchor_pub = this->create_publisher<isas_msgs::msg::Anchorlist>("/EstimationInterface/anchor_list_sfuise", 1000);
         
         timer_anchor = this->create_wall_timer(
             std::chrono::milliseconds(10),
@@ -93,10 +109,10 @@ class EstimationInterface : public rclcpp::Node
             "/SplineFusion/est_window", 100, 
             std::bind(&EstimationInterface::getEstCallback, this, std::placeholders::_1));
         
-        pub_opt_old = this->create_publisher<nav_msgs::msg::Path>("bspline_optimization_old", 1000);
-        pub_opt_window = this->create_publisher<nav_msgs::msg::Path>("bspline_optimization_window", 1000);
+        pub_opt_old = this->create_publisher<nav_msgs::msg::Path>("/EstimationInterface/bspline_optimization_old", 1000);
+        pub_opt_window = this->create_publisher<nav_msgs::msg::Path>("/EstimationInterface/bspline_optimization_window", 1000);
         opt_old_path.header.frame_id = "map";
-        pub_opt_pose = this->create_publisher<visualization_msgs::msg::Marker>("opt_pose", 1000);
+        pub_opt_pose = this->create_publisher<visualization_msgs::msg::Marker>("/EstimationInterface/opt_pose", 1000);
         opt_pose_vis.setColor(85.0/255.0,164.0/255.0,104.0/255.0);
     }
 
@@ -105,6 +121,7 @@ private:
     int64_t dt_ns;
     bool initialized_anchor;
     bool if_tdoa;
+    bool if_fraunhofer_msg;
     bool if_nav_uwb;
     CalibParam calib_param;
     Eigen::aligned_vector<PoseData> gt;
@@ -124,7 +141,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr sub_start;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu;
     rclcpp::SubscriptionBase::SharedPtr sub_uwb;  // 支持多种 UWB 消息类型
+    rclcpp::Subscription<fraunhofer_rtls_flare::msg::RTLSStick>::SharedPtr sub_uwb_fraunhofer;
     rclcpp::Subscription<isas_msgs::msg::Anchorlist>::SharedPtr sub_anchor;
+    rclcpp::Subscription<fraunhofer_rtls_flare::msg::Anchorlist>::SharedPtr sub_anchor_fraunhofer;
     rclcpp::SubscriptionBase::SharedPtr sub_gt;  // 支持多种 GT 消息类型
     rclcpp::Subscription<sfuise_msgs::msg::Calib>::SharedPtr sub_calib;
     rclcpp::Subscription<sfuise_msgs::msg::Estimate>::SharedPtr sub_est;
@@ -144,6 +163,7 @@ private:
     void readParamsInterface()
     {
         if_tdoa = this->declare_parameter<bool>("if_tdoa", false);
+        if_fraunhofer_msg = this->declare_parameter<bool>("if_fraunhofer_msg", false);
         imu_sample_coeff = this->declare_parameter<double>("imu_sample_coeff", 1.0);
         uwb_sample_coeff = this->declare_parameter<double>("uwb_sample_coeff", 1.0);
         imu_frequency = this->declare_parameter<double>("imu_frequency", 100.0);
@@ -265,6 +285,43 @@ private:
         }
     }
 
+    void getToaFraunhoferCallback(const fraunhofer_rtls_flare::msg::RTLSStick::SharedPtr uwb_msg)
+    {
+        static int64_t last_uwb = 0;
+        int64_t t_ns = uwb_msg->header.stamp.sec * (int64_t)1e9 + uwb_msg->header.stamp.nanosec;
+        if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
+            isas_msgs::msg::RTLSStick converted;
+            converted.header = uwb_msg->header;
+            converted.id = uwb_msg->id;
+            converted.t = uwb_msg->t;
+            converted.pos = uwb_msg->pos;
+            converted.mean = uwb_msg->mean;
+            converted.hrp = uwb_msg->hrp;
+            converted.noga = uwb_msg->noga;
+            converted.nora = uwb_msg->nora;
+            converted.ranges.reserve(uwb_msg->ranges.size());
+            for (const auto& rg : uwb_msg->ranges) {
+                if (rg.ra == 0) continue;
+                isas_msgs::msg::RTLSRange rg_c;
+                rg_c.id = rg.id;
+                rg_c.pos = rg.pos;
+                rg_c.pr = rg.pr;
+                rg_c.range = rg.range;
+                rg_c.mean = rg.mean;
+                rg_c.var = rg.var;
+                rg_c.fpp = rg.fpp;
+                rg_c.rxp = rg.rxp;
+                rg_c.csn = rg.csn;
+                rg_c.cmn = rg.cmn;
+                rg_c.toc = rg.toc;
+                rg_c.ra = rg.ra;
+                converted.ranges.push_back(rg_c);
+            }
+            pub_uwb_toa->publish(converted);
+            last_uwb = t_ns;
+        }
+    }
+
     void getTdoaUTILCallback(const cf_msgs::msg::Tdoa::SharedPtr msg)
     {
         static int64_t last_uwb = 0;
@@ -298,6 +355,29 @@ private:
     }
 
     void getAnchorListFromISASCallback(const isas_msgs::msg::Anchorlist::SharedPtr anchor_msg)
+    {
+        if (initialized_anchor) return;
+        int num_sum = 20;
+        static int cnt = 0;
+        for (const auto& anchor : anchor_msg->anchor) {
+            Eigen::Vector3d anchor_pos(anchor.position.x, anchor.position.y, anchor.position.z);
+            uint16_t anchor_id = anchor.id;
+            if (cnt == 0) {
+                anchor_list[anchor_id] = anchor_pos;
+            } else {
+                Eigen::Vector3d ave_pos = anchor_list[anchor_id];
+                anchor_list[anchor_id] = (ave_pos * cnt + anchor_pos) / (cnt + 1);
+                anchor_pos = anchor_list[anchor_id];
+            }
+        }
+        cnt++;
+        if (cnt >= num_sum) {
+            initialized_anchor = true;
+            publishAnchor();
+        }
+    }
+
+    void getAnchorListFromFraunhoferCallback(const fraunhofer_rtls_flare::msg::Anchorlist::SharedPtr anchor_msg)
     {
         if (initialized_anchor) return;
         int num_sum = 20;

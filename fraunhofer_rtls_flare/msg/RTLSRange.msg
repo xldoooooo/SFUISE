@@ -1,0 +1,12 @@
+uint16 id
+geometry_msgs/Point pos
+float32 pr
+float32 range
+float32 mean
+float32 var
+float32 fpp
+float32 rxp
+float32 csn
+float32 cmn
+uint8 toc
+uint8 ra

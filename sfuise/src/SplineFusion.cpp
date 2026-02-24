@@ -29,7 +29,7 @@ class SplineFusion : public rclcpp::Node
             "/EstimationInterface/imu_ds", 1000, 
             std::bind(&SplineFusion::getImuCallback, this, std::placeholders::_1));
         sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
-            "/EstimationInterface/anchor_list", 1000, 
+            "/EstimationInterface/anchor_list_sfuise", 1000, 
             std::bind(&SplineFusion::getAnchorCallback, this, std::placeholders::_1));
         if (if_tdoa) {
             sub_uwb = this->create_subscription<cf_msgs::msg::Tdoa>(
@@ -40,11 +40,11 @@ class SplineFusion : public rclcpp::Node
                 "/EstimationInterface/toa_ds", 1000, 
                 std::bind(&SplineFusion::getToaCallback, this, std::placeholders::_1));
         }
-        pub_knots_active = this->create_publisher<sensor_msgs::msg::PointCloud>("active_control_points", 1000);
-        pub_knots_inactive = this->create_publisher<sensor_msgs::msg::PointCloud>("inactive_control_points", 1000);
-        pub_calib = this->create_publisher<sfuise_msgs::msg::Calib>("sys_calib", 100);
-        pub_est = this->create_publisher<sfuise_msgs::msg::Estimate>("est_window", 1000);
-        pub_start_time = this->create_publisher<std_msgs::msg::Int64>("start_time", 1000);
+        pub_knots_active = this->create_publisher<sensor_msgs::msg::PointCloud>("/SplineFusion/active_control_points", 1000);
+        pub_knots_inactive = this->create_publisher<sensor_msgs::msg::PointCloud>("/SplineFusion/inactive_control_points", 1000);
+        pub_calib = this->create_publisher<sfuise_msgs::msg::Calib>("/SplineFusion/sys_calib", 100);
+        pub_est = this->create_publisher<sfuise_msgs::msg::Estimate>("/SplineFusion/est_window", 1000);
+        pub_start_time = this->create_publisher<std_msgs::msg::Int64>("/SplineFusion/start_time", 1000);
     }
 
     void run()

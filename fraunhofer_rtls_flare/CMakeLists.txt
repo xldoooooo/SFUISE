@@ -1,19 +1,17 @@
 cmake_minimum_required(VERSION 3.5)
-project(cf_msgs)
+project(fraunhofer_rtls_flare)
 
 find_package(ament_cmake REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Gyro.msg"
-  "msg/Accel.msg"
-  "msg/Tdoa.msg"
-  "msg/Twr.msg"
-  "msg/Tof.msg"
-  "msg/Baro.msg"
-  "msg/Flow.msg"
-  DEPENDENCIES std_msgs
+  "msg/RTLSRange.msg"
+  "msg/RTLSStick.msg"
+  "msg/AnchorPosition.msg"
+  "msg/Anchorlist.msg"
+  DEPENDENCIES std_msgs geometry_msgs
 )
 
 ament_package()
