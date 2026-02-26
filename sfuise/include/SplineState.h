@@ -393,41 +393,31 @@ class SplineState
         spline_msg.start_idx = start_i;
         spline_msg.knots.reserve(num_knot);
         spline_msg.idles.reserve(3);
+
+        auto makeKnotMsg = [](const Eigen::Vector3d& pos, const Eigen::Quaterniond& q, 
+                              const Eigen::Matrix<double, 6, 1>& bias) {
+            sfuise_msgs::msg::Knot msg;
+            msg.position.x = pos.x();
+            msg.position.y = pos.y();
+            msg.position.z = pos.z();
+            msg.orientation.w = q.w();
+            msg.orientation.x = q.x();
+            msg.orientation.y = q.y();
+            msg.orientation.z = q.z();
+            msg.bias_acc.x = bias[0];
+            msg.bias_acc.y = bias[1];
+            msg.bias_acc.z = bias[2];
+            msg.bias_gyro.x = bias[3];
+            msg.bias_gyro.y = bias[4];
+            msg.bias_gyro.z = bias[5];
+            return msg;
+        };
+
         for (size_t i = 0; i < num_knot; i++) {
-            sfuise_msgs::msg::Knot knot_msg;
-            knot_msg.position.x = t_knots[i].x();
-            knot_msg.position.y = t_knots[i].y();
-            knot_msg.position.z = t_knots[i].z();
-            knot_msg.orientation.w = q_knots[i].w();
-            knot_msg.orientation.x = q_knots[i].x();
-            knot_msg.orientation.y = q_knots[i].y();
-            knot_msg.orientation.z = q_knots[i].z();
-            Eigen::Matrix<double, 6, 1> bias = b_knots[i];
-            knot_msg.bias_acc.x = bias[0];
-            knot_msg.bias_acc.y = bias[1];
-            knot_msg.bias_acc.z = bias[2];
-            knot_msg.bias_gyro.x = bias[3];
-            knot_msg.bias_gyro.y = bias[4];
-            knot_msg.bias_gyro.z = bias[5];
-            spline_msg.knots.push_back(knot_msg);
+            spline_msg.knots.push_back(makeKnotMsg(t_knots[i], q_knots[i], b_knots[i]));
         }
         for (int i = 0; i < 3; i++) {
-            sfuise_msgs::msg::Knot idle_msg;
-            idle_msg.position.x = t_idle[i].x();
-            idle_msg.position.y = t_idle[i].y();
-            idle_msg.position.z = t_idle[i].z();
-            idle_msg.orientation.w = q_idle[i].w();
-            idle_msg.orientation.x = q_idle[i].x();
-            idle_msg.orientation.y = q_idle[i].y();
-            idle_msg.orientation.z = q_idle[i].z();
-            Eigen::Matrix<double, 6, 1> bias = b_idle[i];
-            idle_msg.bias_acc.x = bias[0];
-            idle_msg.bias_acc.y = bias[1];
-            idle_msg.bias_acc.z = bias[2];
-            idle_msg.bias_gyro.x = bias[3];
-            idle_msg.bias_gyro.y = bias[4];
-            idle_msg.bias_gyro.z = bias[5];
-            spline_msg.idles.push_back(idle_msg);
+            spline_msg.idles.push_back(makeKnotMsg(t_idle[i], q_idle[i], b_idle[i]));
         }
     }
 

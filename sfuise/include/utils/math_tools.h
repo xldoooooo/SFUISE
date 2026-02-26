@@ -1,55 +1,76 @@
 #pragma once
 
-#include <eigen3/Eigen/Geometry>
-#include <eigen3/Eigen/Dense>
-#include <boost/math/special_functions/sinc.hpp>
 #include <cmath>
 
+#include <boost/math/special_functions/sinc.hpp>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
+
+/**
+ * @brief 四元数工具类
+ */
 class Quater
 {
-  public:
-    static void Qleft(const Eigen::Quaterniond &q, Eigen::Matrix4d &ans)
+public:
+    /// 四元数左乘矩阵
+    static Eigen::Matrix4d Qleft(const Eigen::Quaterniond& q)
     {
-        double q1 = q.w();
-        double q2 = q.x();
-        double q3 = q.y();
-        double q4 = q.z();
-        ans << q1, -q2, -q3, -q4,
-               q2,  q1, -q4,  q3,
-               q3,  q4,  q1, -q2,
-               q4, -q3,  q2,  q1;
+        Eigen::Matrix4d ans;
+        double w = q.w(), x = q.x(), y = q.y(), z = q.z();
+        ans << w, -x, -y, -z,
+               x,  w, -z,  y,
+               y,  z,  w, -x,
+               z, -y,  x,  w;
+        return ans;
     }
 
-    static void Qright(const Eigen::Quaterniond &q, Eigen::Matrix4d &ans)
+    /// 四元数右乘矩阵
+    static Eigen::Matrix4d Qright(const Eigen::Quaterniond& q)
     {
-        double q1 = q.w();
-        double q2 = q.x();
-        double q3 = q.y();
-        double q4 = q.z();
-        ans << q1, -q2, -q3, -q4,
-               q2,  q1,  q4, -q3,
-               q3, -q4,  q1,  q2,
-               q4,  q3, -q2,  q1;
+        Eigen::Matrix4d ans;
+        double w = q.w(), x = q.x(), y = q.y(), z = q.z();
+        ans << w, -x, -y, -z,
+               x,  w,  z, -y,
+               y, -z,  w,  x,
+               z,  y, -x,  w;
+        return ans;
     }
 
-    static void exp(const Eigen::Vector3d &v, Eigen::Quaterniond& q)
+    /// 兼容旧 API
+    static void Qleft(const Eigen::Quaterniond& q, Eigen::Matrix4d& ans) { ans = Qleft(q); }
+    static void Qright(const Eigen::Quaterniond& q, Eigen::Matrix4d& ans) { ans = Qright(q); }
+
+    /// 四元数指数映射
+    static Eigen::Quaterniond exp(const Eigen::Vector3d& v)
+    {
+        double v_norm = v.norm();
+        return Eigen::Quaterniond(std::cos(v_norm), 
+                                  boost::math::sinc_pi(v_norm) * v.x(),
+                                  boost::math::sinc_pi(v_norm) * v.y(),
+                                  boost::math::sinc_pi(v_norm) * v.z());
+    }
+
+    /// 兼容旧 API
+    static void exp(const Eigen::Vector3d& v, Eigen::Quaterniond& q)
     {
         double v_norm = v.norm();
         q.w() = std::cos(v_norm);
         q.vec() = boost::math::sinc_pi(v_norm) * v;
     }
 
-    static void log(const Eigen::Quaterniond &q, Eigen::Vector3d& v)
+    /// 四元数对数映射
+    static Eigen::Vector3d log(const Eigen::Quaterniond& q)
     {
         Eigen::Quaterniond qn = q.normalized();
-        Eigen::Vector3d rv = qn.vec();
-        double norm_rv = rv.norm();
+        double norm_rv = qn.vec().norm();
         if (norm_rv > 1e-5) {
-            v = std::atan(norm_rv / qn.w()) * rv / norm_rv;
-        } else {
-            v.setZero();
+            return std::atan(norm_rv / qn.w()) * qn.vec() / norm_rv;
         }
+        return Eigen::Vector3d::Zero();
     }
+
+    /// 兼容旧 API
+    static void log(const Eigen::Quaterniond& q, Eigen::Vector3d& v) { v = log(q); }
 
 
     static void dexp(const Eigen::Vector3d& v, Eigen::Quaterniond& q, Eigen::Matrix<double,4,3>& J)
@@ -177,21 +198,19 @@ class Quater
 class Sphere
 {
 public:
+    /// 计算球面切平面基底
     static Eigen::Matrix<double, 3, 2> TangentBasis(const Eigen::Vector3d& g0)
     {
-        Eigen::Vector3d b, c;
         Eigen::Vector3d a = g0.normalized();
-        Eigen::Vector3d tmp(0, 0, 1);
-        if(a != tmp) {
-            b = (tmp - a * (a(2))).normalized();
-        } else {
-            tmp << 1, 0, 0;
-            b = (tmp - a * (a(0))).normalized();
-        }
-        c = a.cross(b);
+        Eigen::Vector3d tmp = (a != Eigen::Vector3d::UnitZ()) 
+                             ? Eigen::Vector3d::UnitZ() 
+                             : Eigen::Vector3d::UnitX();
+        Eigen::Vector3d b = (tmp - a * a.dot(tmp)).normalized();
+        Eigen::Vector3d c = a.cross(b);
+        
         Eigen::Matrix<double, 3, 2> bc;
-        bc.block<3, 1>(0, 0) = b;
-        bc.block<3, 1>(0, 1) = c;
+        bc.col(0) = b;
+        bc.col(1) = c;
         return bc;
     }
 };

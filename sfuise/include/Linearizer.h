@@ -7,6 +7,29 @@
 #include "SplineState.h"
 #include "Residuals.h"
 
+namespace sfuise {
+namespace detail {
+
+/// 计算加权方差逆
+inline Eigen::Vector3d computeWeightedVarInv(const Eigen::Vector3d& var_inv, double weight, double count)
+{
+    return (var_inv * weight).cwiseProduct(var_inv * weight) / count;
+}
+
+/// 缩放 Jacobian 和残差
+template <typename JacobianT>
+void scaleJacobianAndResidual(JacobianT& J, Eigen::Vector3d& J_tUW, Eigen::Vector3d& J_qUW,
+                               double& residual, double scale)
+{
+    for (auto& j : J.d_val_d_knot) j *= scale;
+    J_tUW *= scale;
+    J_qUW *= scale;
+    residual *= scale;
+}
+
+}  // namespace detail
+}  // namespace sfuise
+
 struct Linearizer
 {
     static const int POSE_SIZE = 6;
@@ -360,18 +383,13 @@ struct Linearizer
 
 struct ComputeErrorSplineOpt
 {
-    double error;
+    double error = 0;
     SplineState* spline;
     CalibParam* calib_param;
     const Parameters* param;
 
     ComputeErrorSplineOpt(SplineState* spl, CalibParam* cbpar, const Parameters* par)
-        : spline(spl), calib_param(cbpar), param(par)
-    {
-        error = 0;
-    }
-
-    ~ComputeErrorSplineOpt() {}
+        : spline(spl), calib_param(cbpar), param(par) {}
 
     void operator()(const Eigen::aligned_deque<ImuData>& r)
     {
