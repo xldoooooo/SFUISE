@@ -35,50 +35,9 @@ class EstimationInterface : public rclcpp::Node
         sub_start = this->create_subscription<std_msgs::msg::Int64>(
             "/SplineFusion/start_time", 1000, 
             std::bind(&EstimationInterface::startCallBack, this, std::placeholders::_1));
-        
-        std::string imu_type = this->declare_parameter<std::string>("topic_imu", "");
-        sub_imu = this->create_subscription<sensor_msgs::msg::Imu>(
-            imu_type, 400, 
-            std::bind(&EstimationInterface::getImuCallback, this, std::placeholders::_1));
-        pub_imu = this->create_publisher<sensor_msgs::msg::Imu>("/EstimationInterface/imu_ds", 400);
-        
-        std::string uwb_type = this->declare_parameter<std::string>("topic_uwb", "");
-        if (!uwb_type.compare("/tdoa_data")) {
-            sub_uwb = this->create_subscription<cf_msgs::msg::Tdoa>(
-                uwb_type, 400, 
-                std::bind(&EstimationInterface::getTdoaUTILCallback, this, std::placeholders::_1));
-            pub_uwb_tdoa = this->create_publisher<cf_msgs::msg::Tdoa>("/EstimationInterface/tdoa_ds", 400);
-        } else if (!uwb_type.compare("/rtls_flares")) {
-            if (if_fraunhofer_msg) {
-                sub_uwb_fraunhofer = this->create_subscription<fraunhofer_rtls_flare::msg::RTLSStick>(
-                    uwb_type, 400,
-                    std::bind(&EstimationInterface::getToaFraunhoferCallback, this, std::placeholders::_1));
-            } else {
-                sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
-                    uwb_type, 400,
-                    std::bind(&EstimationInterface::getToaISASCallback, this, std::placeholders::_1));
-            }
-            pub_uwb_toa = this->create_publisher<isas_msgs::msg::RTLSStick>("/EstimationInterface/toa_ds", 400);
-        } else {
-            RCLCPP_ERROR(this->get_logger(), "Wrong UWB format!");
-        }
-        
-        std::string anchor_type = this->declare_parameter<std::string>("topic_anchor_list", "");
-        if (!if_tdoa) {
-            if (!anchor_type.compare("/anchor_list")) {
-                if (if_fraunhofer_msg) {
-                    sub_anchor_fraunhofer = this->create_subscription<fraunhofer_rtls_flare::msg::Anchorlist>(
-                        anchor_type, 400,
-                        std::bind(&EstimationInterface::getAnchorListFromFraunhoferCallback, this, std::placeholders::_1));
-                } else {
-                    sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
-                        anchor_type, 400,
-                        std::bind(&EstimationInterface::getAnchorListFromISASCallback, this, std::placeholders::_1));
-                }
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "Anchor list not available!");
-            }
-        }
+        setupImuInterface();
+        setupUwbInterface();
+        setupAnchorInterface();
         
         anchor_pos_pub = this->create_publisher<sensor_msgs::msg::PointCloud>("/EstimationInterface/visualization_anchor", 1000);
         anchor_pub = this->create_publisher<isas_msgs::msg::Anchorlist>("/EstimationInterface/anchor_list_sfuise", 1000);
@@ -86,17 +45,7 @@ class EstimationInterface : public rclcpp::Node
         timer_anchor = this->create_wall_timer(
             std::chrono::milliseconds(10),
             std::bind(&EstimationInterface::publishAnchor, this));
-        
-        std::string gt_type = this->declare_parameter<std::string>("topic_ground_truth", "");
-        if (!gt_type.compare("/vive/transform/tracker_1_ref")) {
-            sub_gt = this->create_subscription<geometry_msgs::msg::TransformStamped>(
-                gt_type, 1000, 
-                std::bind(&EstimationInterface::getGtFromISASCallback, this, std::placeholders::_1));
-        } else if (!gt_type.compare("/pose_data")) {
-            sub_gt = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-                gt_type, 1000, 
-                std::bind(&EstimationInterface::getGtFromUTILCallback, this, std::placeholders::_1));
-        }
+        setupGtInterface();
         
         int control_point_fps = this->declare_parameter<int>("control_point_fps", 100);
         dt_ns = 1e9 / control_point_fps;
@@ -133,6 +82,7 @@ private:
     double average_runtime;
     bool gyro_unit;
     bool acc_ratio;
+    int anchor_init_count;
     SplineState spline_global;
     Eigen::aligned_vector<PoseData> opt_old;
     Eigen::aligned_vector<PoseData> opt_window;
@@ -160,8 +110,157 @@ private:
     nav_msgs::msg::Path opt_old_path;
     PoseVisualization opt_pose_vis;
 
+    std::string getStringParam(const std::string& key)
+    {
+        return this->declare_parameter<std::string>(key, "");
+    }
+
+    void setupImuInterface()
+    {
+        std::string imu_type = getStringParam("topic_imu");
+        sub_imu = this->create_subscription<sensor_msgs::msg::Imu>(
+            imu_type, 400,
+            std::bind(&EstimationInterface::getImuCallback, this, std::placeholders::_1));
+        pub_imu = this->create_publisher<sensor_msgs::msg::Imu>("/EstimationInterface/imu_ds", 400);
+    }
+
+    void setupUwbInterface()
+    {
+        std::string uwb_type = getStringParam("topic_uwb");
+        if (uwb_type == "/tdoa_data") {
+            sub_uwb = this->create_subscription<cf_msgs::msg::Tdoa>(
+                uwb_type, 400,
+                std::bind(&EstimationInterface::getTdoaUTILCallback, this, std::placeholders::_1));
+            pub_uwb_tdoa = this->create_publisher<cf_msgs::msg::Tdoa>("/EstimationInterface/tdoa_ds", 400);
+        } else if (uwb_type == "/rtls_flares") {
+            if (if_fraunhofer_msg) {
+                sub_uwb_fraunhofer = this->create_subscription<fraunhofer_rtls_flare::msg::RTLSStick>(
+                    uwb_type, 400,
+                    std::bind(&EstimationInterface::getToaFraunhoferCallback, this, std::placeholders::_1));
+            } else {
+                sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
+                    uwb_type, 400,
+                    std::bind(&EstimationInterface::getToaISASCallback, this, std::placeholders::_1));
+            }
+            pub_uwb_toa = this->create_publisher<isas_msgs::msg::RTLSStick>("/EstimationInterface/toa_ds", 400);
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Wrong UWB format!");
+        }
+    }
+
+    void setupAnchorInterface()
+    {
+        std::string anchor_type = getStringParam("topic_anchor_list");
+        if (if_tdoa) {
+            return;
+        }
+        if (anchor_type == "/anchor_list") {
+            if (if_fraunhofer_msg) {
+                sub_anchor_fraunhofer = this->create_subscription<fraunhofer_rtls_flare::msg::Anchorlist>(
+                    anchor_type, 400,
+                    std::bind(&EstimationInterface::getAnchorListFromFraunhoferCallback, this, std::placeholders::_1));
+            } else {
+                sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
+                    anchor_type, 400,
+                    std::bind(&EstimationInterface::getAnchorListFromISASCallback, this, std::placeholders::_1));
+            }
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Anchor list not available!");
+        }
+    }
+
+    void setupGtInterface()
+    {
+        std::string gt_type = getStringParam("topic_ground_truth");
+        if (gt_type == "/vive/transform/tracker_1_ref") {
+            sub_gt = this->create_subscription<geometry_msgs::msg::TransformStamped>(
+                gt_type, 1000,
+                std::bind(&EstimationInterface::getGtFromISASCallback, this, std::placeholders::_1));
+        } else if (gt_type == "/pose_data") {
+            sub_gt = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+                gt_type, 1000,
+                std::bind(&EstimationInterface::getGtFromUTILCallback, this, std::placeholders::_1));
+        }
+    }
+
+    int64_t getMsgTimeNs(const std_msgs::msg::Header& header) const
+    {
+        return header.stamp.sec * (int64_t)1e9 + header.stamp.nanosec;
+    }
+
+    void appendGtPose(const int64_t t_ns, const Eigen::Quaterniond& q, const Eigen::Vector3d& pos)
+    {
+        Eigen::Quaterniond q_copy = q;
+        Eigen::Vector3d pos_copy = pos;
+        gt.push_back(PoseData(t_ns, q_copy, pos_copy));
+    }
+
+    void processToaAndPublish(const isas_msgs::msg::RTLSStick& toa_msg, int64_t& last_uwb)
+    {
+        int64_t t_ns = getMsgTimeNs(toa_msg.header);
+        if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
+            pub_uwb_toa->publish(toa_msg);
+            last_uwb = t_ns;
+        }
+    }
+
+    isas_msgs::msg::RTLSStick convertFraunhoferToIsas(const fraunhofer_rtls_flare::msg::RTLSStick& uwb_msg) const
+    {
+        isas_msgs::msg::RTLSStick converted;
+        converted.header = uwb_msg.header;
+        converted.id = uwb_msg.id;
+        converted.t = uwb_msg.t;
+        converted.pos = uwb_msg.pos;
+        converted.mean = uwb_msg.mean;
+        converted.hrp = uwb_msg.hrp;
+        converted.noga = uwb_msg.noga;
+        converted.nora = uwb_msg.nora;
+        converted.ranges.reserve(uwb_msg.ranges.size());
+        for (const auto& rg : uwb_msg.ranges) {
+            if (rg.ra == 0) continue;
+            isas_msgs::msg::RTLSRange rg_c;
+            rg_c.id = rg.id;
+            rg_c.pos = rg.pos;
+            rg_c.pr = rg.pr;
+            rg_c.range = rg.range;
+            rg_c.mean = rg.mean;
+            rg_c.var = rg.var;
+            rg_c.fpp = rg.fpp;
+            rg_c.rxp = rg.rxp;
+            rg_c.csn = rg.csn;
+            rg_c.cmn = rg.cmn;
+            rg_c.toc = rg.toc;
+            rg_c.ra = rg.ra;
+            converted.ranges.push_back(rg_c);
+        }
+        return converted;
+    }
+
+    template <typename AnchorListMsgT>
+    void accumulateAnchorList(const AnchorListMsgT& anchor_msg)
+    {
+        if (initialized_anchor) return;
+        const int num_sum = 20;
+        for (const auto& anchor : anchor_msg.anchor) {
+            Eigen::Vector3d anchor_pos(anchor.position.x, anchor.position.y, anchor.position.z);
+            uint16_t anchor_id = anchor.id;
+            if (anchor_init_count == 0) {
+                anchor_list[anchor_id] = anchor_pos;
+            } else {
+                Eigen::Vector3d ave_pos = anchor_list[anchor_id];
+                anchor_list[anchor_id] = (ave_pos * anchor_init_count + anchor_pos) / (anchor_init_count + 1);
+            }
+        }
+        anchor_init_count++;
+        if (anchor_init_count >= num_sum) {
+            initialized_anchor = true;
+            publishAnchor();
+        }
+    }
+
     void readParamsInterface()
     {
+        anchor_init_count = 0;
         if_tdoa = this->declare_parameter<bool>("if_tdoa", false);
         if_fraunhofer_msg = this->declare_parameter<bool>("if_fraunhofer_msg", false);
         imu_sample_coeff = this->declare_parameter<double>("imu_sample_coeff", 1.0);
@@ -244,7 +343,7 @@ private:
     void getImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu_msg)
     {
         static int64_t last_imu = 0;
-        int64_t t_ns = imu_msg->header.stamp.sec * (int64_t)1e9 + imu_msg->header.stamp.nanosec;
+        int64_t t_ns = getMsgTimeNs(imu_msg->header);
         if (sampleData(t_ns, last_imu, imu_sample_coeff, imu_frequency)) {
             Eigen::Vector3d acc(imu_msg->linear_acceleration.x, imu_msg->linear_acceleration.y, imu_msg->linear_acceleration.z);
             if (acc_ratio) acc *= 9.81;
@@ -275,60 +374,20 @@ private:
     void getToaISASCallback(const isas_msgs::msg::RTLSStick::SharedPtr uwb_msg)
     {
         static int64_t last_uwb = 0;
-        int64_t t_ns = uwb_msg->header.stamp.sec * (int64_t)1e9 + uwb_msg->header.stamp.nanosec;
-        if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
-            for (const auto& rg : uwb_msg->ranges) {
-                if (rg.ra == 0) continue;
-            }
-            pub_uwb_toa->publish(*uwb_msg);
-            last_uwb = t_ns;
-        }
+        processToaAndPublish(*uwb_msg, last_uwb);
     }
 
     void getToaFraunhoferCallback(const fraunhofer_rtls_flare::msg::RTLSStick::SharedPtr uwb_msg)
     {
         static int64_t last_uwb = 0;
-        int64_t t_ns = uwb_msg->header.stamp.sec * (int64_t)1e9 + uwb_msg->header.stamp.nanosec;
-        if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
-            isas_msgs::msg::RTLSStick converted;
-            converted.header = uwb_msg->header;
-            converted.id = uwb_msg->id;
-            converted.t = uwb_msg->t;
-            converted.pos = uwb_msg->pos;
-            converted.mean = uwb_msg->mean;
-            converted.hrp = uwb_msg->hrp;
-            converted.noga = uwb_msg->noga;
-            converted.nora = uwb_msg->nora;
-            converted.ranges.reserve(uwb_msg->ranges.size());
-            for (const auto& rg : uwb_msg->ranges) {
-                if (rg.ra == 0) continue;
-                isas_msgs::msg::RTLSRange rg_c;
-                rg_c.id = rg.id;
-                rg_c.pos = rg.pos;
-                rg_c.pr = rg.pr;
-                rg_c.range = rg.range;
-                rg_c.mean = rg.mean;
-                rg_c.var = rg.var;
-                rg_c.fpp = rg.fpp;
-                rg_c.rxp = rg.rxp;
-                rg_c.csn = rg.csn;
-                rg_c.cmn = rg.cmn;
-                rg_c.toc = rg.toc;
-                rg_c.ra = rg.ra;
-                converted.ranges.push_back(rg_c);
-            }
-            pub_uwb_toa->publish(converted);
-            last_uwb = t_ns;
-        }
+        processToaAndPublish(convertFraunhoferToIsas(*uwb_msg), last_uwb);
     }
 
     void getTdoaUTILCallback(const cf_msgs::msg::Tdoa::SharedPtr msg)
     {
         static int64_t last_uwb = 0;
-        int64_t t_ns = msg->header.stamp.sec * (int64_t)1e9 + msg->header.stamp.nanosec;
+        int64_t t_ns = getMsgTimeNs(msg->header);
         if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
-            int idA = msg->id_a;
-            int idB = msg->id_b;
             pub_uwb_tdoa->publish(*msg);
             last_uwb = t_ns;
         }
@@ -339,9 +398,7 @@ private:
         Eigen::Quaterniond q(gt_msg->transform.rotation.w, gt_msg->transform.rotation.x,
                              gt_msg->transform.rotation.y, gt_msg->transform.rotation.z);
         Eigen::Vector3d pos(gt_msg->transform.translation.x, gt_msg->transform.translation.y, gt_msg->transform.translation.z);
-        int64_t t_ns = gt_msg->header.stamp.sec * (int64_t)1e9 + gt_msg->header.stamp.nanosec;
-        PoseData pose(t_ns, q, pos);
-        gt.push_back(pose);
+        appendGtPose(getMsgTimeNs(gt_msg->header), q, pos);
     }
 
     void getGtFromUTILCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr gt_msg)
@@ -349,55 +406,17 @@ private:
         Eigen::Quaterniond q(gt_msg->pose.pose.orientation.w, gt_msg->pose.pose.orientation.x,
                              gt_msg->pose.pose.orientation.y, gt_msg->pose.pose.orientation.z);
         Eigen::Vector3d pos(gt_msg->pose.pose.position.x, gt_msg->pose.pose.position.y, gt_msg->pose.pose.position.z);
-        int64_t t_ns = gt_msg->header.stamp.sec * (int64_t)1e9 + gt_msg->header.stamp.nanosec;
-        PoseData pose(t_ns, q, pos);
-        gt.push_back(pose);
+        appendGtPose(getMsgTimeNs(gt_msg->header), q, pos);
     }
 
     void getAnchorListFromISASCallback(const isas_msgs::msg::Anchorlist::SharedPtr anchor_msg)
     {
-        if (initialized_anchor) return;
-        int num_sum = 20;
-        static int cnt = 0;
-        for (const auto& anchor : anchor_msg->anchor) {
-            Eigen::Vector3d anchor_pos(anchor.position.x, anchor.position.y, anchor.position.z);
-            uint16_t anchor_id = anchor.id;
-            if (cnt == 0) {
-                anchor_list[anchor_id] = anchor_pos;
-            } else {
-                Eigen::Vector3d ave_pos = anchor_list[anchor_id];
-                anchor_list[anchor_id] = (ave_pos * cnt + anchor_pos) / (cnt + 1);
-                anchor_pos = anchor_list[anchor_id];
-            }
-        }
-        cnt++;
-        if (cnt >= num_sum) {
-            initialized_anchor = true;
-            publishAnchor();
-        }
+        accumulateAnchorList(*anchor_msg);
     }
 
     void getAnchorListFromFraunhoferCallback(const fraunhofer_rtls_flare::msg::Anchorlist::SharedPtr anchor_msg)
     {
-        if (initialized_anchor) return;
-        int num_sum = 20;
-        static int cnt = 0;
-        for (const auto& anchor : anchor_msg->anchor) {
-            Eigen::Vector3d anchor_pos(anchor.position.x, anchor.position.y, anchor.position.z);
-            uint16_t anchor_id = anchor.id;
-            if (cnt == 0) {
-                anchor_list[anchor_id] = anchor_pos;
-            } else {
-                Eigen::Vector3d ave_pos = anchor_list[anchor_id];
-                anchor_list[anchor_id] = (ave_pos * cnt + anchor_pos) / (cnt + 1);
-                anchor_pos = anchor_list[anchor_id];
-            }
-        }
-        cnt++;
-        if (cnt >= num_sum) {
-            initialized_anchor = true;
-            publishAnchor();
-        }
+        accumulateAnchorList(*anchor_msg);
     }
 
     void getAnchorListFromUTIL(const std::string& anchor_path)
@@ -425,49 +444,43 @@ private:
 
     bool sampleData(const int64_t t_ns, const int64_t last_t_ns, const double coeff, const double frequency) const
     {
-        if (coeff == 0)  return false;
+        if (coeff == 0) return false;
+        if (coeff == 1) return true;
         int64_t dt = 1e9 / (coeff * frequency);
-        if (coeff == 1) {
-            return true;
-        } else if (t_ns - last_t_ns > dt - 1e5) {
-            return true;
-        } else {
-            return false;
-        }
+        return (t_ns - last_t_ns > dt - 1e5);
     }
 
     void publishAnchor()
     {
         if (!initialized_anchor) {
             return;
-        } else {
-            isas_msgs::msg::Anchorlist anchor_list_msg;
-            for (auto it = anchor_list.begin(); it != anchor_list.end(); it++) {
-                isas_msgs::msg::AnchorPosition anchor;
-                Eigen::Vector3d pos = it->second;
-                anchor.position.x = pos[0];
-                anchor.position.y = pos[1];
-                anchor.position.z = pos[2];
-                anchor.id = it->first;
-                anchor_list_msg.anchor.push_back(anchor);
-            }
-            anchor_pub->publish(anchor_list_msg);
-            sensor_msgs::msg::PointCloud anchors;
-            anchors.header.frame_id = "map";
-            auto now = std::chrono::system_clock::now();
-            anchors.header.stamp.sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-            anchors.header.stamp.nanosec = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                now.time_since_epoch() % std::chrono::seconds(1)).count();
-            for (auto it = anchor_list.begin(); it != anchor_list.end(); it++) {
-                Eigen::Matrix<double, 3, 1> pos = it->second;
-                geometry_msgs::msg::Point32 p;
-                p.x = pos[0];
-                p.y = pos[1];
-                p.z = pos[2];
-                anchors.points.push_back(p);
-            }
-            anchor_pos_pub->publish(anchors);
         }
+        isas_msgs::msg::Anchorlist anchor_list_msg;
+        for (auto it = anchor_list.begin(); it != anchor_list.end(); it++) {
+            isas_msgs::msg::AnchorPosition anchor;
+            Eigen::Vector3d pos = it->second;
+            anchor.position.x = pos[0];
+            anchor.position.y = pos[1];
+            anchor.position.z = pos[2];
+            anchor.id = it->first;
+            anchor_list_msg.anchor.push_back(anchor);
+        }
+        anchor_pub->publish(anchor_list_msg);
+        sensor_msgs::msg::PointCloud anchors;
+        anchors.header.frame_id = "map";
+        auto now = std::chrono::system_clock::now();
+        anchors.header.stamp.sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        anchors.header.stamp.nanosec = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch() % std::chrono::seconds(1)).count();
+        for (auto it = anchor_list.begin(); it != anchor_list.end(); it++) {
+            Eigen::Matrix<double, 3, 1> pos = it->second;
+            geometry_msgs::msg::Point32 p;
+            p.x = pos[0];
+            p.y = pos[1];
+            p.z = pos[2];
+            anchors.points.push_back(p);
+        }
+        anchor_pos_pub->publish(anchors);
     }
 
     void startCallBack(const std_msgs::msg::Int64::SharedPtr start_time_msg)

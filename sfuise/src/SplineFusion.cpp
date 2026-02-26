@@ -146,13 +146,15 @@ class SplineFusion : public rclcpp::Node
     double average_runtime;
     std::vector<double> v_toa_offset;
 
+    Eigen::Vector3d declareVector3Param(const std::string& key, const std::vector<double>& defaults)
+    {
+        const auto values = this->declare_parameter<std::vector<double>>(key, defaults);
+        return Eigen::Vector3d(values.at(0), values.at(1), values.at(2));
+    }
+
     void readParameters()
     {
-        if (this->declare_parameter<double>("imu_sample_coeff", 1.0) == 0) {
-            if_uwb_only = true;
-        } else {
-            if_uwb_only = false;
-        }
+        if_uwb_only = (this->declare_parameter<double>("imu_sample_coeff", 1.0) == 0);
         param.if_opt_g = true;
         param.if_opt_transform = true;
         param.w_uwb = this->declare_parameter<double>("w_uwb", 1.0);
@@ -169,16 +171,12 @@ class SplineFusion : public rclcpp::Node
             param.q_nav_uwb_init.setIdentity();
             param.t_nav_uwb_init.setZero();
         }
-        std::vector<double> accel_var_inv = this->declare_parameter<std::vector<double>>("accel_var_inv", std::vector<double>{1.0, 1.0, 1.0});
-        param.accel_var_inv << accel_var_inv.at(0), accel_var_inv.at(1), accel_var_inv.at(2);
-        std::vector<double> bias_accel_var_inv = this->declare_parameter<std::vector<double>>("bias_accel_var_inv", std::vector<double>{1.0, 1.0, 1.0});
-        param.bias_accel_var_inv << bias_accel_var_inv.at(0), bias_accel_var_inv.at(1), bias_accel_var_inv.at(2);
+        param.accel_var_inv = declareVector3Param("accel_var_inv", std::vector<double>{1.0, 1.0, 1.0});
+        param.bias_accel_var_inv = declareVector3Param("bias_accel_var_inv", std::vector<double>{1.0, 1.0, 1.0});
         param.w_acc = this->declare_parameter<double>("w_accel", 1.0);
         param.w_bias_acc = this->declare_parameter<double>("w_bias_accel", 1.0);
-        std::vector<double> gyro_var_inv = this->declare_parameter<std::vector<double>>("gyro_var_inv", std::vector<double>{1.0, 1.0, 1.0});
-        param.gyro_var_inv << gyro_var_inv.at(0), gyro_var_inv.at(1), gyro_var_inv.at(2);
-        std::vector<double> bias_gyro_var_inv = this->declare_parameter<std::vector<double>>("bias_gyro_var_inv", std::vector<double>{1.0, 1.0, 1.0});
-        param.bias_gyro_var_inv << bias_gyro_var_inv.at(0), bias_gyro_var_inv.at(1), bias_gyro_var_inv.at(2);
+        param.gyro_var_inv = declareVector3Param("gyro_var_inv", std::vector<double>{1.0, 1.0, 1.0});
+        param.bias_gyro_var_inv = declareVector3Param("bias_gyro_var_inv", std::vector<double>{1.0, 1.0, 1.0});
         param.w_gyro = this->declare_parameter<double>("w_gyro", 1.0);
         param.w_bias_gyro = this->declare_parameter<double>("w_bias_gyro", 1.0);
         param.if_reject_uwb = this->declare_parameter<bool>("if_reject_uwb", false);
@@ -186,8 +184,7 @@ class SplineFusion : public rclcpp::Node
             param.reject_uwb_thresh = this->declare_parameter<double>("reject_uwb_thresh", 1.0);
             param.reject_uwb_window_width = this->declare_parameter<double>("reject_uwb_window_width", 1.0);
         }
-        std::vector<double> v_offset = this->declare_parameter<std::vector<double>>("offset", std::vector<double>{0.0, 0.0, 0.0});
-        calib_param.offset = Eigen::Vector3d(v_offset.at(0), v_offset.at(1), v_offset.at(2));
+        calib_param.offset = declareVector3Param("offset", std::vector<double>{0.0, 0.0, 0.0});
         if (!if_tdoa) {
             v_toa_offset = this->declare_parameter<std::vector<double>>("toa_offset", std::vector<double>{});
         }
@@ -238,14 +235,14 @@ class SplineFusion : public rclcpp::Node
     void updateMeasurements(Eigen::aligned_deque<type_data>& data_window, Eigen::aligned_deque<type_data>& data_buff)
     {
         int64_t t_window_l = spline_local.minTimeNs();
-        if(!data_window.empty()) {
+        if (!data_window.empty()) {
             while (data_window.front().time_ns < t_window_l) {
-               data_window.pop_front();
+                data_window.pop_front();
             }
         }
         int64_t t_window_r = spline_local.maxTimeNs();
         for (size_t i = 0; i < data_buff.size(); i++) {
-            auto v = data_buff.at(i);
+            const auto& v = data_buff.at(i);
             if (v.time_ns >= t_window_l && v.time_ns <= t_window_r) {
                 data_window.push_back(v);
             } else if (v.time_ns > t_window_r) {
@@ -254,7 +251,7 @@ class SplineFusion : public rclcpp::Node
         }
         while (data_buff.front().time_ns <= t_window_r) {
             data_buff.pop_front();
-            if(data_buff.empty()) break;
+            if (data_buff.empty()) break;
         }
     }
 
