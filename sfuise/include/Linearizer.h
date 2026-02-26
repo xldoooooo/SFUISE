@@ -2,40 +2,10 @@
 
 #include "utils/common_utils.h"
 #include "utils/math_tools.h"
+#include "types/parameters.h"
 #include "Accumulator.h"
 #include "SplineState.h"
 #include "Residuals.h"
-
-struct Parameters {
-
-    bool if_opt_g;
-    bool if_opt_transform;
-    bool if_reject_uwb;
-    bool if_reject_uwb_in_optimization;
-
-    double w_uwb;
-    double w_acc;
-    double w_gyro;
-    double w_bias_acc;
-    double w_bias_gyro;
-    double reject_uwb_thresh;
-    double reject_uwb_window_width;
-
-    int control_point_fps;
-
-    Eigen::Vector3d accel_var_inv, gyro_var_inv;
-    Eigen::Vector3d bias_accel_var_inv, bias_gyro_var_inv;
-    Eigen::Vector3d pos_var_inv;
-    Eigen::Vector3d t_nav_uwb_init;
-    Eigen::Quaterniond q_nav_uwb_init;
-
-    Eigen::aligned_map<uint16_t, Eigen::Vector3d> anchor_list;
-    Eigen::aligned_map<uint16_t, double> toa_offset;
-
-    Parameters() : toa_offset{{(uint16_t)0, 0}} {}
-
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
 
 struct Linearizer
 {
@@ -254,23 +224,23 @@ struct Linearizer
     void operator()(Eigen::aligned_deque<TOAData>& r)
     {
         size_t set_fixed = 1;
-        bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
-        double reject_uwb_thresh = param->reject_uwb_thresh;
-        Eigen::aligned_map<uint16_t, double> time_offset = param->toa_offset;
-        double w_uwb = param->w_uwb;
-        double num_toa = r.size();
-        Eigen::aligned_map<uint16_t, Eigen::Vector3d> an_list = param->anchor_list;
-        Eigen::Vector3d t_UW = calib_param->t_nav_uwb;
-        Eigen::Quaterniond q_UW = calib_param->q_nav_uwb;
+        const bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
+        const double reject_uwb_thresh = param->reject_uwb_thresh;
+        const auto& time_offset = param->toa_offset;
+        const double w_uwb = param->w_uwb;
+        const double num_toa = r.size();
+        const auto& an_list = param->anchor_list;
+        const Eigen::Vector3d& t_UW = calib_param->t_nav_uwb;
+        const Eigen::Quaterniond& q_UW = calib_param->q_nav_uwb;
+        const Eigen::Vector3d& offset = calib_param->offset;
         for (auto& pm : r) {
             Jacobian16 J;
             Eigen::Vector3d J_tUW, J_qUW;
             int64_t t_ns = pm.time_ns;
             uint16_t anchor_id = pm.anchor_id;
-            Eigen::Vector3d offset = calib_param->offset;
             double residual = Residuals::toaResidualJacobian(t_ns, spline, pm.data, an_list.at(anchor_id), offset,
-                                                             t_UW, q_UW, time_offset[anchor_id], &J, &J_tUW, &J_qUW);
-            if (if_reject_uwb_in_optimization && abs(residual) > reject_uwb_thresh) {
+                                                             t_UW, q_UW, time_offset.at(anchor_id), &J, &J_tUW, &J_qUW);
+            if (if_reject_uwb_in_optimization && std::abs(residual) > reject_uwb_thresh) {
                 continue;
             }
             double e2 = residual * residual;
@@ -322,24 +292,24 @@ struct Linearizer
     void operator()(Eigen::aligned_deque<TDOAData>& r)
     {
         size_t set_fixed = 1;
-        bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
-        double reject_uwb_thresh = param->reject_uwb_thresh;
-        double w_uwb = param->w_uwb;
-        double num_tdoa = r.size();
-        Eigen::aligned_map<uint16_t, Eigen::Vector3d> an_list = param->anchor_list;
-        Eigen::Vector3d t_UW = calib_param->t_nav_uwb;
-        Eigen::Quaterniond q_UW = calib_param->q_nav_uwb;
+        const bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
+        const double reject_uwb_thresh = param->reject_uwb_thresh;
+        const double w_uwb = param->w_uwb;
+        const double num_tdoa = r.size();
+        const auto& an_list = param->anchor_list;
+        const Eigen::Vector3d& t_UW = calib_param->t_nav_uwb;
+        const Eigen::Quaterniond& q_UW = calib_param->q_nav_uwb;
+        const Eigen::Vector3d& offset = calib_param->offset;
         for (auto& pm : r) {
             Jacobian16 J;
             Eigen::Vector3d J_tUW, J_qUW;
             int64_t t_ns = pm.time_ns;
             int anchor_idA = pm.idA;
             int anchor_idB = pm.idB;
-            Eigen::Vector3d offset = calib_param->offset;
             double residual = Residuals::tdoaResidualJacobian(t_ns, spline, pm.data, an_list.at(anchor_idA),
                                                               an_list.at(anchor_idB), offset, t_UW, q_UW, &J, &J_tUW, &J_qUW);
             size_t num_Ji = J.d_val_d_knot.size();
-            if (if_reject_uwb_in_optimization && abs(residual) > reject_uwb_thresh) {
+            if (if_reject_uwb_in_optimization && std::abs(residual) > reject_uwb_thresh) {
               continue;
             }
             double range_std_inv = 1.0 / sqrt(num_tdoa);
@@ -448,21 +418,21 @@ struct ComputeErrorSplineOpt
 
     void operator() (const Eigen::aligned_deque<TOAData>& r)
     {
-        bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
-        double reject_uwb_thresh = param->reject_uwb_thresh;
-        Eigen::aligned_map<uint16_t, double> time_offset = param->toa_offset;
-        double w_uwb = param->w_uwb;
-        double num_toa = r.size();
-        Eigen::aligned_map<uint16_t, Eigen::Vector3d> an_list = param->anchor_list;
-        Eigen::Vector3d t_UW = calib_param->t_nav_uwb;
-        Eigen::Quaterniond q_UW = calib_param->q_nav_uwb;
+        const bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
+        const double reject_uwb_thresh = param->reject_uwb_thresh;
+        const auto& time_offset = param->toa_offset;
+        const double w_uwb = param->w_uwb;
+        const double num_toa = r.size();
+        const auto& an_list = param->anchor_list;
+        const Eigen::Vector3d& t_UW = calib_param->t_nav_uwb;
+        const Eigen::Quaterniond& q_UW = calib_param->q_nav_uwb;
+        const Eigen::Vector3d& offset = calib_param->offset;
         for (const auto& pm : r) {
             int64_t t_ns = pm.time_ns;
-            Eigen::Vector3d offset = calib_param->offset;
             uint16_t anchor_id = pm.anchor_id;
             double residual = Residuals::toaResidual(t_ns, spline, pm.data, an_list.at(anchor_id),
-                                                     offset, t_UW, q_UW, time_offset[anchor_id]);
-            if (if_reject_uwb_in_optimization && abs(residual) > reject_uwb_thresh) {
+                                                     offset, t_UW, q_UW, time_offset.at(anchor_id));
+            if (if_reject_uwb_in_optimization && std::abs(residual) > reject_uwb_thresh) {
               continue;
             }
             double e2 = residual * residual;
@@ -473,21 +443,19 @@ struct ComputeErrorSplineOpt
 
     void operator()(Eigen::aligned_deque<TDOAData>& r)
     {
-        bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
-        double reject_uwb_thresh = param->reject_uwb_thresh;
-        double w_uwb = param->w_uwb;
-        double num_tdoa = r.size();
-        Eigen::aligned_map<uint16_t, Eigen::Vector3d> an_list = param->anchor_list;
-        Eigen::Vector3d t_UW = calib_param->t_nav_uwb;
-        Eigen::Quaterniond q_UW = calib_param->q_nav_uwb;
+        const bool if_reject_uwb_in_optimization = param->if_reject_uwb_in_optimization;
+        const double reject_uwb_thresh = param->reject_uwb_thresh;
+        const double w_uwb = param->w_uwb;
+        const double num_tdoa = r.size();
+        const auto& an_list = param->anchor_list;
+        const Eigen::Vector3d& t_UW = calib_param->t_nav_uwb;
+        const Eigen::Quaterniond& q_UW = calib_param->q_nav_uwb;
+        const Eigen::Vector3d& offset = calib_param->offset;
         for (auto& pm : r) {
-            Jacobian16 J;
-            Eigen::Vector3d J_tUW, J_qUW;
             int64_t t_ns = pm.time_ns;
-            Eigen::Vector3d offset = calib_param->offset;
             double residual = Residuals::tdoaResidual(t_ns, spline, pm.data, an_list.at(pm.idA), an_list.at(pm.idB),
                                                       offset, t_UW, q_UW);
-            if (if_reject_uwb_in_optimization && abs(residual) > reject_uwb_thresh) {
+            if (if_reject_uwb_in_optimization && std::abs(residual) > reject_uwb_thresh) {
                 continue;
             }
             double range_std_inv = 1.0 / sqrt(num_tdoa);

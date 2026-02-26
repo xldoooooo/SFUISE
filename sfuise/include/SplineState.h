@@ -1,23 +1,33 @@
+/**
+ * @file SplineState.h
+ * @brief B-spline 状态表示和插值
+ */
 #pragma once
 
 #include "utils/common_utils.h"
 #include "utils/math_tools.h"
-#include "sfuise_msgs/msg/spline.hpp"
 #include "sfuise_msgs/msg/knot.hpp"
+#include "sfuise_msgs/msg/spline.hpp"
 
+/**
+ * @brief Jacobian 结构体 - 存储稀疏 Jacobian 矩阵
+ */
 template <class MatT>
 struct JacobianStruct {
-    size_t start_idx;
-    std::vector<MatT> d_val_d_knot;
+    size_t start_idx;                    ///< Jacobian 块的起始索引
+    std::vector<MatT> d_val_d_knot;      ///< 对每个控制点的导数
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-typedef JacobianStruct<double> Jacobian;
-typedef JacobianStruct<Eigen::Matrix<double, 4, 3>> Jacobian43;
-typedef JacobianStruct<Eigen::Matrix3d> Jacobian33;
-typedef JacobianStruct<Eigen::Vector3d> Jacobian13;
-typedef JacobianStruct<Eigen::Matrix<double, 6, 1>> Jacobian16;
-typedef JacobianStruct<Eigen::Matrix<double, 3, 6>> Jacobian36;
+/// @name Jacobian 类型别名
+/// @{
+using Jacobian = JacobianStruct<double>;
+using Jacobian43 = JacobianStruct<Eigen::Matrix<double, 4, 3>>;
+using Jacobian33 = JacobianStruct<Eigen::Matrix3d>;
+using Jacobian13 = JacobianStruct<Eigen::Vector3d>;
+using Jacobian16 = JacobianStruct<Eigen::Matrix<double, 6, 1>>;
+using Jacobian36 = JacobianStruct<Eigen::Matrix<double, 3, 6>>;
+/// @}
 
 class SplineState
 {
@@ -68,7 +78,7 @@ class SplineState
         b_idle = other->b_idle;
     }
 
-    Eigen::Vector3d getIdlePos(int idx)
+    const Eigen::Vector3d& getIdlePos(int idx) const
     {
         return t_idle[idx];
     }
@@ -92,19 +102,14 @@ class SplineState
     void addOneStateKnot(Eigen::Quaterniond q, Eigen::Vector3d pos, Eigen::Matrix<double, 6, 1> bias)
     {
         if (num_knot > 1) {
-            Eigen::Quaterniond q0 = q_knots[num_knot - 1];
-            Eigen::Quaterniond q1 = q;
-            double dot_product = q0.dot(q1);
-            if (dot_product < 0) {
-               q = Eigen::Quaterniond(-q.w(), -q.x(), -q.y(), -q.z());
-            }
+            q = Quater::ensurePositiveDot(q_knots[num_knot - 1], q);
         }
-        if (abs(q.norm() - 1) > 1e-5) {
+        if (std::abs(q.norm() - 1) > 1e-5) {
             q.normalize();
         }
         q_knots.push_back(q);
-        t_knots.push_back(pos);
-        b_knots.push_back(bias);
+        t_knots.push_back(std::move(pos));
+        b_knots.push_back(std::move(bias));
         num_knot++;
     }
 
@@ -112,10 +117,7 @@ class SplineState
     {
         if (num_knot > 1) {
             for (size_t i = 1; i < num_knot; i++) {
-                Eigen::Quaterniond q1 = q_knots[i];
-                if (q_knots[i - 1].dot(q1) < 0) {
-                    q_knots[i] = Eigen::Quaterniond(-q1.w(), -q1.x(), -q1.y(), -q1.z());
-                }
+                q_knots[i] = Quater::ensurePositiveDot(q_knots[i - 1], q_knots[i]);
             }
         }
     }
@@ -158,17 +160,17 @@ class SplineState
         return start_t_ns + i * dt_ns;
     }
 
-    Eigen::Quaterniond getKnotOrt(size_t i)
+    const Eigen::Quaterniond& getKnotOrt(size_t i) const
     {
         return q_knots[i];
     }
 
-    Eigen::Vector3d getKnotPos(size_t i)
+    const Eigen::Vector3d& getKnotPos(size_t i) const
     {
         return t_knots[i];
     }
 
-    Eigen::Matrix<double, 6, 1> getKnotBias(size_t i)
+    const Eigen::Matrix<double, 6, 1>& getKnotBias(size_t i) const
     {
         return b_knots[i];
     }
@@ -203,7 +205,7 @@ class SplineState
         b_knots[i] += inc;
     }
 
-    int64_t maxTimeNs()
+    int64_t maxTimeNs() const
     {
         if (num_knot == 1) {
            return start_t_ns;
@@ -211,17 +213,17 @@ class SplineState
         return start_t_ns + (num_knot - 1) * dt_ns - 1;
     }
 
-    int64_t minTimeNs()
+    int64_t minTimeNs() const
     {
         return start_t_ns + dt_ns * (!if_first ?  -1 : 0);
     }
 
-    int64_t nextMaxTimeNs()
+    int64_t nextMaxTimeNs() const
     {
         return start_t_ns + num_knot * dt_ns - 1;
     }
 
-    size_t numKnots()
+    size_t numKnots() const
     {
         return num_knot;
     }
@@ -384,11 +386,13 @@ class SplineState
         }
     }
 
-    void getSplineMsg(sfuise_msgs::msg::Spline& spline_msg)
+    void getSplineMsg(sfuise_msgs::msg::Spline& spline_msg) const
     {
         spline_msg.dt = dt_ns;
         spline_msg.start_t = start_t_ns;
         spline_msg.start_idx = start_i;
+        spline_msg.knots.reserve(num_knot);
+        spline_msg.idles.reserve(3);
         for (size_t i = 0; i < num_knot; i++) {
             sfuise_msgs::msg::Knot knot_msg;
             knot_msg.position.x = t_knots[i].x();
@@ -565,6 +569,6 @@ class SplineState
     }
 };
 
-const Eigen::Matrix4d SplineState::base_coefficients = SplineState::computeBaseCoefficients();
-const Eigen::Matrix4d SplineState::blending_matrix = SplineState::computeBlendingMatrix();
-const Eigen::Matrix4d SplineState::cumulative_blending_matrix = SplineState::computeBlendingMatrix<true>();
+inline const Eigen::Matrix4d SplineState::base_coefficients = SplineState::computeBaseCoefficients();
+inline const Eigen::Matrix4d SplineState::blending_matrix = SplineState::computeBlendingMatrix();
+inline const Eigen::Matrix4d SplineState::cumulative_blending_matrix = SplineState::computeBlendingMatrix<true>();

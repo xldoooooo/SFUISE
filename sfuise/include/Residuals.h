@@ -1,11 +1,19 @@
+/**
+ * @file Residuals.h
+ * @brief 传感器测量残差计算
+ */
 #pragma once
 
-#include "utils/math_tools.h"
 #include "SplineState.h"
+#include "utils/math_tools.h"
 
+/**
+ * @brief 残差计算工具类
+ *
+ * 提供 IMU、TOA、TDOA 等传感器残差及其 Jacobian 的计算
+ */
 class Residuals
 {
-
 public:
 
     static Eigen::Matrix<double, 6, 1> imuResidual(int64_t time_ns, const SplineState* spl,

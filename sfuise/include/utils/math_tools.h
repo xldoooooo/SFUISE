@@ -155,6 +155,23 @@ class Quater
     {
         return Eigen::Quaterniond(1.0, theta(0)/2, theta(1)/2, theta(2)/2);
     }
+
+    /**
+     * @brief 取反四元数 (q -> -q)，保持表示相同的旋转
+     */
+    static Eigen::Quaterniond negate(const Eigen::Quaterniond& q)
+    {
+        return Eigen::Quaterniond(-q.w(), -q.x(), -q.y(), -q.z());
+    }
+
+    /**
+     * @brief 确保两个四元数的点积为正，如果需要则取反 q1
+     * @return 可能取反后的 q1
+     */
+    static Eigen::Quaterniond ensurePositiveDot(const Eigen::Quaterniond& q0, const Eigen::Quaterniond& q1)
+    {
+        return (q0.dot(q1) < 0) ? negate(q1) : q1;
+    }
 };
 
 class Sphere

@@ -1,23 +1,37 @@
+/**
+ * @file Accumulator.h
+ * @brief 稀疏矩阵累加器 - 用于构建 Hessian 和梯度
+ */
 #pragma once
 
+// C++ 标准库
 #include <array>
 #include <chrono>
 #include <unordered_map>
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/Sparse>
-#include <eigen3/Eigen/CholmodSupport>
 
+// Eigen
+#include <Eigen/CholmodSupport>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+
+/**
+ * @brief 稀疏 Cholesky 分解类型别名
+ */
 template <class T>
 using SparseLLT = Eigen::CholmodSupernodalLLT<T>;
 
+/**
+ * @brief 基于哈希表的稀疏累加器
+ *
+ * 用于高效构建稀疏 Hessian 矩阵和梯度向量
+ */
 class SparseHashAccumulator
 {
- public:
-
-    typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorX;
-    typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MatrixX;
-    typedef Eigen::Triplet<double> T;
-    typedef Eigen::SparseMatrix<double> SparseMatrix;
+public:
+    using VectorX = Eigen::Matrix<double, Eigen::Dynamic, 1>;
+    using MatrixX = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
+    using Triplet = Eigen::Triplet<double>;
+    using SparseMatrix = Eigen::SparseMatrix<double>;
 
     template <int ROWS, int COLS, typename Derived>
     inline void addH(int si, int sj, const Eigen::MatrixBase<Derived>& data)
@@ -44,7 +58,7 @@ class SparseHashAccumulator
 
     inline void setup_solver()
     {
-        std::vector<T> triplets;
+        std::vector<Triplet> triplets;
         triplets.reserve(hash_map.size() * 36 + b.rows());
         for (const auto& kv : hash_map) {
             for (int i = 0; i < kv.second.rows(); i++) {

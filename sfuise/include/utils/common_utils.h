@@ -1,102 +1,54 @@
+/**
+ * @file common_utils.h
+ * @brief 通用工具函数和类型定义
+ *
+ * 这个文件作为向后兼容的入口点，包含所有相关类型定义。
+ * 新代码应直接包含具体的类型头文件。
+ */
 #pragma once
 
+// 类型定义
+#include "../types/eigen_types.h"
+#include "../types/sensor_data.h"
+#include "../types/calib_param.h"
+
+// ROS2 消息转换
 #include <rclcpp/rclcpp.hpp>
-#include <eigen3/Eigen/Core>
-#include <eigen3/Eigen/Dense>
-#include <deque>
-#include <map>
-#include <unordered_map>
-#include <vector>
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
-namespace Eigen {
+namespace sfuise {
 
-template <typename T>
-using aligned_vector = std::vector<T, Eigen::aligned_allocator<T>>;
-
-template <typename T>
-using aligned_deque = std::deque<T, Eigen::aligned_allocator<T>>;
-
-template <typename K, typename V>
-using aligned_map = std::map<K, V, std::less<K>,
-                    Eigen::aligned_allocator<std::pair<K const, V>>>;
-
-template <typename K, typename V>
-using aligned_unordered_map = std::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
-                              Eigen::aligned_allocator<std::pair<K const, V>>>;
-
-}
-
-struct PoseData {
-  int64_t time_ns;
-  Eigen::Quaterniond orient;
-  Eigen::Vector3d pos;
-  PoseData(){}
-  PoseData(int64_t s, Eigen::Quaterniond& q, Eigen::Vector3d& t) : time_ns(s), orient(q), pos(t) {}
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
-
-struct ImuData {
-    const int64_t time_ns;
-    const Eigen::Vector3d gyro;
-    const Eigen::Vector3d accel;
-    ImuData(const int64_t s, const Eigen::Vector3d& w, const Eigen::Vector3d& a)
-      : time_ns(s), gyro(w), accel(a) {}
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
-
-struct TOAData {
-    const int64_t time_ns;
-    const int anchor_id;
-    const double data;
-    TOAData(const int64_t s, const int i, const double r) : time_ns(s), anchor_id(i), data(r) {};
-};
-
-struct TDOAData {
-  const int64_t time_ns;
-  const int idA;
-  const int idB;
-  const double data;
-  TDOAData(const int64_t s, const int idxA, const int idxB, const double r) : time_ns(s), idA(idxA), idB(idxB), data(r) {};
-};
-
-class CalibParam
-{
-  public:
-    Eigen::Vector3d offset;
-    Eigen::Quaterniond q_nav_uwb;
-    Eigen::Vector3d t_nav_uwb;
-    Eigen::Vector3d gravity;
-
-    CalibParam(){};
-
-    void setCalibParam(CalibParam calib_param)
-    {
-        offset = calib_param.offset;
-        q_nav_uwb = calib_param.q_nav_uwb;
-        t_nav_uwb = calib_param.t_nav_uwb;
-        gravity =calib_param.gravity;
-    }
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
-
-class CommonUtils
-{
+/**
+ * @brief 通用工具函数集合
+ */
+class CommonUtils {
 public:
+    /**
+     * @brief 从 ROS 节点读取参数
+     * @deprecated 使用 ParamUtils::declare() 代替
+     */
     template <typename T>
-    static T readParam(rclcpp::Node::SharedPtr node, std::string name)
+    static T readParam(rclcpp::Node::SharedPtr node, const std::string& name)
     {
         T ans;
-        if (!node->get_parameter(name, ans))
-        {
+        if (!node->get_parameter(name, ans)) {
             RCLCPP_ERROR_STREAM(node->get_logger(), "Failed to load " << name);
             rclcpp::shutdown();
         }
         return ans;
     }
 
-    static geometry_msgs::msg::PoseStamped pose2msg(const int64_t t, const Eigen::Vector3d& pos,
-                                              const Eigen::Quaterniond& orient)
+    /**
+     * @brief 将位姿转换为 ROS PoseStamped 消息
+     * @param t 时间戳 (纳秒)
+     * @param pos 位置
+     * @param orient 姿态
+     * @return PoseStamped 消息
+     */
+    static geometry_msgs::msg::PoseStamped pose2msg(
+        const int64_t t,
+        const Eigen::Vector3d& pos,
+        const Eigen::Quaterniond& orient)
     {
         geometry_msgs::msg::PoseStamped msg;
         msg.header.stamp = rclcpp::Time(t);
@@ -110,3 +62,8 @@ public:
         return msg;
     }
 };
+
+}  // namespace sfuise
+
+// 向后兼容
+using CommonUtils = sfuise::CommonUtils;

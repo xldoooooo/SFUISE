@@ -26,10 +26,22 @@ include_directories(
   ${SUITESPARSE_INCLUDE_DIRS}
 )
 
-add_executable(EstimationInterface src/EstimationInterface.cpp)
+add_executable(EstimationInterface
+  src/EstimationInterface.cpp
+  src/EstimationInterface_setup.cpp
+  src/EstimationInterface_common.cpp
+  src/EstimationInterface_callbacks.cpp
+  src/EstimationInterface_anchor.cpp
+  src/rtls_adapters.cpp
+  src/EstimationInterface_node.cpp)
 ament_target_dependencies(EstimationInterface rclcpp std_msgs nav_msgs sensor_msgs geometry_msgs visualization_msgs cf_msgs isas_msgs sfuise_msgs fraunhofer_rtls_flare)
 
-add_executable(SplineFusion src/SplineFusion.cpp)
+add_executable(SplineFusion
+  src/SplineFusion.cpp
+  src/SplineFusion_setup.cpp
+  src/SplineFusion_propagation.cpp
+  src/SplineFusion_optimization.cpp
+  src/SplineFusion_node.cpp)
 ament_target_dependencies(SplineFusion rclcpp std_msgs sensor_msgs geometry_msgs cf_msgs isas_msgs sfuise_msgs)
 target_link_libraries(SplineFusion cholmod)
 

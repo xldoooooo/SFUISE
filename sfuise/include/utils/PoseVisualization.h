@@ -112,11 +112,11 @@ private:
         p.z = v.z();
     }
 };
-const Eigen::Vector3d PoseVisualization::imlt = Eigen::Vector3d(-0.7, -0.7, -0.5);
-const Eigen::Vector3d PoseVisualization::imlb = Eigen::Vector3d(-0.7, 0.7, -0.5);
-const Eigen::Vector3d PoseVisualization::imrt = Eigen::Vector3d(-0.7, -0.7, 0.5);
-const Eigen::Vector3d PoseVisualization::imrb = Eigen::Vector3d(-0.7, 0.7, 0.5);
-const Eigen::Vector3d PoseVisualization::oc = Eigen::Vector3d(0.0, 0.0, 0.0);
-const Eigen::Vector3d PoseVisualization::lt0 = Eigen::Vector3d(-0.7, -0.35, -0.5);
-const Eigen::Vector3d PoseVisualization::lt1 = Eigen::Vector3d(-0.7, -0.35, -0.25);
-const Eigen::Vector3d PoseVisualization::lt2 = Eigen::Vector3d(-0.7, -0.7, -0.25);
+inline const Eigen::Vector3d PoseVisualization::imlt = Eigen::Vector3d(-0.7, -0.7, -0.5);
+inline const Eigen::Vector3d PoseVisualization::imlb = Eigen::Vector3d(-0.7, 0.7, -0.5);
+inline const Eigen::Vector3d PoseVisualization::imrt = Eigen::Vector3d(-0.7, -0.7, 0.5);
+inline const Eigen::Vector3d PoseVisualization::imrb = Eigen::Vector3d(-0.7, 0.7, 0.5);
+inline const Eigen::Vector3d PoseVisualization::oc = Eigen::Vector3d(0.0, 0.0, 0.0);
+inline const Eigen::Vector3d PoseVisualization::lt0 = Eigen::Vector3d(-0.7, -0.35, -0.5);
+inline const Eigen::Vector3d PoseVisualization::lt1 = Eigen::Vector3d(-0.7, -0.35, -0.25);
+inline const Eigen::Vector3d PoseVisualization::lt2 = Eigen::Vector3d(-0.7, -0.7, -0.25);
