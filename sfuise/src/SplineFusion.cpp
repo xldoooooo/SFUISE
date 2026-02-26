@@ -1,5 +1,6 @@
 #include "SplineFusion.h"
 #include "SplineFusion_topics.h"
+#include "utils/node_msg_utils.h"
 
 SplineFusion::SplineFusion() : rclcpp::Node("SplineFusion")
 {
@@ -43,18 +44,9 @@ void SplineFusion::run()
         num_window++;
         if ((int)window_count <= n_window_calib) {
             sfuise_msgs::msg::Calib calib_msg;
-            calib_msg.q_nav_uwb.w = calib_param.q_nav_uwb.w();
-            calib_msg.q_nav_uwb.x = calib_param.q_nav_uwb.x();
-            calib_msg.q_nav_uwb.y = calib_param.q_nav_uwb.y();
-            calib_msg.q_nav_uwb.z = calib_param.q_nav_uwb.z();
-            calib_msg.t_nav_uwb.x = calib_param.t_nav_uwb[0];
-            calib_msg.t_nav_uwb.y = calib_param.t_nav_uwb[1];
-            calib_msg.t_nav_uwb.z = calib_param.t_nav_uwb[2];
-            geometry_msgs::msg::Point offset_msg;
-            offset_msg.x = calib_param.offset.x();
-            offset_msg.y = calib_param.offset.y();
-            offset_msg.z = calib_param.offset.z();
-            calib_msg.t_tag_body_set = offset_msg;
+            calib_msg.q_nav_uwb = NodeMsgUtils::toQuaternionMsg(calib_param.q_nav_uwb);
+            calib_msg.t_nav_uwb = NodeMsgUtils::toPointMsg(calib_param.t_nav_uwb);
+            calib_msg.t_tag_body_set = NodeMsgUtils::toPointMsg(calib_param.offset);
             pub_calib->publish(calib_msg);
         }
         if (spline_local.numKnots() >= (size_t)window_size) {

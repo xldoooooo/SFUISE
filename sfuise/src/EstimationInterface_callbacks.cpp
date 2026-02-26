@@ -1,5 +1,6 @@
 #include "EstimationInterface.h"
 
+#include "utils/node_msg_utils.h"
 #include "utils/param_keys.h"
 #include "utils/param_utils.h"
 
@@ -7,7 +8,6 @@ void EstimationInterface::readParamsInterface()
 {
     anchor_init_count = 0;
     if_tdoa = ParamUtils::declare<bool>(*this, ParamKeys::EstimationInterface::kIfTdoa, false);
-    if_fraunhofer_msg = ParamUtils::declare<bool>(*this, ParamKeys::EstimationInterface::kIfFraunhoferMsg, false);
     topic_imu = ParamUtils::declare<std::string>(*this, ParamKeys::EstimationInterface::kTopicImu, "");
     topic_uwb = ParamUtils::declare<std::string>(*this, ParamKeys::EstimationInterface::kTopicUwb, "");
     topic_anchor_list = ParamUtils::declare<std::string>(*this, ParamKeys::EstimationInterface::kTopicAnchorList, "");
@@ -34,18 +34,18 @@ void EstimationInterface::getEstCallback(const sfuise_msgs::msg::Estimate::Share
     sfuise_msgs::msg::Spline spline_msg = est_msg->spline;
     SplineState spline_w;
     spline_w.init(spline_msg.dt, 0, spline_msg.start_t, spline_msg.start_idx);
-    for (const auto knot : spline_msg.knots) {
-        Eigen::Vector3d pos(knot.position.x, knot.position.y, knot.position.z);
-        Eigen::Quaterniond quat(knot.orientation.w, knot.orientation.x, knot.orientation.y, knot.orientation.z);
+    for (const auto& knot : spline_msg.knots) {
+        Eigen::Vector3d pos = NodeMsgUtils::toVector3d(knot.position);
+        Eigen::Quaterniond quat = NodeMsgUtils::toQuaterniond(knot.orientation);
         Eigen::Matrix<double, 6, 1> bias;
         bias << knot.bias_acc.x, knot.bias_acc.y, knot.bias_acc.z,
             knot.bias_gyro.x, knot.bias_gyro.y, knot.bias_gyro.z;
         spline_w.addOneStateKnot(quat, pos, bias);
     }
     for (int i = 0; i < 3; i++) {
-        sfuise_msgs::msg::Knot idle = spline_msg.idles[i];
-        Eigen::Vector3d t_idle(idle.position.x, idle.position.y, idle.position.z);
-        Eigen::Quaterniond q_idle(idle.orientation.w, idle.orientation.x, idle.orientation.y, idle.orientation.z);
+        const auto& idle = spline_msg.idles[i];
+        Eigen::Vector3d t_idle = NodeMsgUtils::toVector3d(idle.position);
+        Eigen::Quaterniond q_idle = NodeMsgUtils::toQuaterniond(idle.orientation);
         Eigen::Matrix<double, 6, 1> b_idle;
         b_idle << idle.bias_acc.x, idle.bias_acc.y, idle.bias_acc.z, idle.bias_gyro.x, idle.bias_gyro.y, idle.bias_gyro.z;
         spline_w.setIdles(i, t_idle, q_idle, b_idle);
@@ -93,7 +93,7 @@ void EstimationInterface::pubOpt(SplineState& spline_local, const bool if_window
 void EstimationInterface::getImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu_msg)
 {
     static int64_t last_imu = 0;
-    int64_t t_ns = getMsgTimeNs(imu_msg->header);
+    int64_t t_ns = NodeMsgUtils::headerToNs(imu_msg->header);
     if (sampleData(t_ns, last_imu, imu_sample_coeff, imu_frequency)) {
         last_imu = t_ns;
         pub_imu->publish(normalizeImuMessage(*imu_msg));
@@ -103,15 +103,10 @@ void EstimationInterface::getImuCallback(const sensor_msgs::msg::Imu::SharedPtr 
 void EstimationInterface::getCalibCallback(const sfuise_msgs::msg::Calib::SharedPtr calib_msg)
 {
     if_nav_uwb = true;
-    calib_param.q_nav_uwb = Eigen::Quaterniond(calib_msg->q_nav_uwb.w, calib_msg->q_nav_uwb.x, calib_msg->q_nav_uwb.y, calib_msg->q_nav_uwb.z);
-    calib_param.t_nav_uwb = Eigen::Vector3d(calib_msg->t_nav_uwb.x, calib_msg->t_nav_uwb.y, calib_msg->t_nav_uwb.z);
-    calib_param.gravity = Eigen::Vector3d(calib_msg->gravity.x, calib_msg->gravity.y, calib_msg->gravity.z);
-    calib_param.offset = Eigen::Vector3d(calib_msg->t_tag_body_set.x, calib_msg->t_tag_body_set.y, calib_msg->t_tag_body_set.z);
-}
-
-void EstimationInterface::getToaISASCallback(const isas_msgs::msg::RTLSStick::SharedPtr uwb_msg)
-{
-    handleToaMessage(*uwb_msg);
+    calib_param.q_nav_uwb = NodeMsgUtils::toQuaterniond(calib_msg->q_nav_uwb);
+    calib_param.t_nav_uwb = NodeMsgUtils::toVector3d(calib_msg->t_nav_uwb);
+    calib_param.gravity = NodeMsgUtils::toVector3d(calib_msg->gravity);
+    calib_param.offset = NodeMsgUtils::toVector3d(calib_msg->t_tag_body_set);
 }
 
 void EstimationInterface::handleToaMessage(const isas_msgs::msg::RTLSStick& uwb_msg)
@@ -131,7 +126,7 @@ void EstimationInterface::getGtFromISASCallback(const geometry_msgs::msg::Transf
     Eigen::Quaterniond q(gt_msg->transform.rotation.w, gt_msg->transform.rotation.x,
         gt_msg->transform.rotation.y, gt_msg->transform.rotation.z);
     Eigen::Vector3d pos(gt_msg->transform.translation.x, gt_msg->transform.translation.y, gt_msg->transform.translation.z);
-    appendGtPose(getMsgTimeNs(gt_msg->header), q, pos);
+    appendGtPose(NodeMsgUtils::headerToNs(gt_msg->header), q, pos);
 }
 
 void EstimationInterface::getGtFromUTILCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr gt_msg)
@@ -139,12 +134,7 @@ void EstimationInterface::getGtFromUTILCallback(const geometry_msgs::msg::PoseWi
     Eigen::Quaterniond q(gt_msg->pose.pose.orientation.w, gt_msg->pose.pose.orientation.x,
         gt_msg->pose.pose.orientation.y, gt_msg->pose.pose.orientation.z);
     Eigen::Vector3d pos(gt_msg->pose.pose.position.x, gt_msg->pose.pose.position.y, gt_msg->pose.pose.position.z);
-    appendGtPose(getMsgTimeNs(gt_msg->header), q, pos);
-}
-
-void EstimationInterface::getAnchorListFromISASCallback(const isas_msgs::msg::Anchorlist::SharedPtr anchor_msg)
-{
-    handleAnchorListMessage(*anchor_msg);
+    appendGtPose(NodeMsgUtils::headerToNs(gt_msg->header), q, pos);
 }
 
 void EstimationInterface::handleAnchorListMessage(const isas_msgs::msg::Anchorlist& anchor_msg)

@@ -20,7 +20,6 @@
   <depend>cf_msgs</depend>
   <depend>isas_msgs</depend>
   <depend>sfuise_msgs</depend>
-  <depend>fraunhofer_rtls_flare</depend>
   
   <build_depend>eigen3-dev</build_depend>
   <build_depend>libblas-dev</build_depend>

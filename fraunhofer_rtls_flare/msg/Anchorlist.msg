@@ -1,1 +1,0 @@
-AnchorPosition[] anchor

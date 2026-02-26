@@ -1,9 +1,5 @@
 #include "EstimationInterface.h"
 #include "EstimationInterface_topics.h"
-#include "rtls_adapters.h"
-
-#include "fraunhofer_rtls_flare/msg/anchorlist.hpp"
-#include "fraunhofer_rtls_flare/msg/rtls_stick.hpp"
 
 void EstimationInterface::setupImuInterface()
 {
@@ -21,7 +17,11 @@ void EstimationInterface::setupUwbInterface()
             std::bind(&EstimationInterface::getTdoaUTILCallback, this, std::placeholders::_1));
         pub_uwb_tdoa = this->create_publisher<cf_msgs::msg::Tdoa>(EstimationInterfaceTopics::kTopicUwbTdoaOut, 400);
     } else if (topic_uwb == EstimationInterfaceTopics::kTopicParamUwbToa) {
-        setupRtlsUwbSubscriber(topic_uwb);
+        sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
+            topic_uwb, 400,
+            [this](const isas_msgs::msg::RTLSStick::SharedPtr uwb_msg) {
+                handleToaMessage(*uwb_msg);
+            });
         pub_uwb_toa = this->create_publisher<isas_msgs::msg::RTLSStick>(EstimationInterfaceTopics::kTopicUwbToaOut, 400);
     } else {
         RCLCPP_ERROR(this->get_logger(), "Wrong UWB format!");
@@ -36,41 +36,15 @@ void EstimationInterface::setupAnchorInterface()
         return;
     }
     if (topic_anchor_list == EstimationInterfaceTopics::kTopicParamAnchorList) {
-        setupRtlsAnchorSubscriber(topic_anchor_list);
+        sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
+            topic_anchor_list, 400,
+            [this](const isas_msgs::msg::Anchorlist::SharedPtr anchor_msg) {
+                handleAnchorListMessage(*anchor_msg);
+            });
     } else {
         RCLCPP_ERROR(this->get_logger(), "Anchor list not available!");
         rclcpp::shutdown();
         return;
-    }
-}
-
-void EstimationInterface::setupRtlsUwbSubscriber(const std::string& uwb_type)
-{
-    if (if_fraunhofer_msg) {
-        sub_uwb = this->create_subscription<fraunhofer_rtls_flare::msg::RTLSStick>(
-            uwb_type, 400,
-            [this](const fraunhofer_rtls_flare::msg::RTLSStick::SharedPtr uwb_msg) {
-                handleToaMessage(RTLSAdapters::fraunhoferToIsas(*uwb_msg));
-            });
-    } else {
-        sub_uwb = this->create_subscription<isas_msgs::msg::RTLSStick>(
-            uwb_type, 400,
-            std::bind(&EstimationInterface::getToaISASCallback, this, std::placeholders::_1));
-    }
-}
-
-void EstimationInterface::setupRtlsAnchorSubscriber(const std::string& anchor_type)
-{
-    if (if_fraunhofer_msg) {
-        sub_anchor = this->create_subscription<fraunhofer_rtls_flare::msg::Anchorlist>(
-            anchor_type, 400,
-            [this](const fraunhofer_rtls_flare::msg::Anchorlist::SharedPtr anchor_msg) {
-                handleAnchorListMessage(RTLSAdapters::fraunhoferToIsas(*anchor_msg));
-            });
-    } else {
-        sub_anchor = this->create_subscription<isas_msgs::msg::Anchorlist>(
-            anchor_type, 400,
-            std::bind(&EstimationInterface::getAnchorListFromISASCallback, this, std::placeholders::_1));
     }
 }
 

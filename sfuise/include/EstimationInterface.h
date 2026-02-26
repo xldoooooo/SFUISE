@@ -44,7 +44,6 @@ class EstimationInterface : public rclcpp::Node
     int64_t dt_ns;
     bool initialized_anchor;
     bool if_tdoa;
-    bool if_fraunhofer_msg;
     bool if_nav_uwb;
     CalibParam calib_param;
     Eigen::aligned_vector<PoseData> gt;
@@ -91,10 +90,7 @@ class EstimationInterface : public rclcpp::Node
     void setupUwbInterface();
     void setupAnchorInterface();
     void setupGtInterface();
-    void setupRtlsUwbSubscriber(const std::string& uwb_type);
-    void setupRtlsAnchorSubscriber(const std::string& anchor_type);
 
-    int64_t getMsgTimeNs(const std_msgs::msg::Header& header) const;
     sensor_msgs::msg::Imu normalizeImuMessage(const sensor_msgs::msg::Imu& imu_msg) const;
     void appendGtPose(const int64_t t_ns, const Eigen::Quaterniond& q, const Eigen::Vector3d& pos);
     void processToaAndPublish(const isas_msgs::msg::RTLSStick& toa_msg, int64_t& last_uwb);
@@ -129,11 +125,9 @@ class EstimationInterface : public rclcpp::Node
     void pubOpt(SplineState& spline_local, const bool if_window_full);
     void getImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu_msg);
     void getCalibCallback(const sfuise_msgs::msg::Calib::SharedPtr calib_msg);
-    void getToaISASCallback(const isas_msgs::msg::RTLSStick::SharedPtr uwb_msg);
     void getTdoaUTILCallback(const cf_msgs::msg::Tdoa::SharedPtr msg);
     void getGtFromISASCallback(const geometry_msgs::msg::TransformStamped::SharedPtr gt_msg);
     void getGtFromUTILCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr gt_msg);
-    void getAnchorListFromISASCallback(const isas_msgs::msg::Anchorlist::SharedPtr anchor_msg);
     void getAnchorListFromUTIL(const std::string& anchor_path);
     bool sampleData(const int64_t t_ns, const int64_t last_t_ns, const double coeff, const double frequency) const;
     void publishAnchor();

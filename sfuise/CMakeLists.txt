@@ -15,7 +15,6 @@ find_package(visualization_msgs REQUIRED)
 find_package(cf_msgs REQUIRED)
 find_package(isas_msgs REQUIRED)
 find_package(sfuise_msgs REQUIRED)
-find_package(fraunhofer_rtls_flare REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(SuiteSparse REQUIRED MODULE)
 
@@ -32,9 +31,8 @@ add_executable(EstimationInterface
   src/EstimationInterface_common.cpp
   src/EstimationInterface_callbacks.cpp
   src/EstimationInterface_anchor.cpp
-  src/rtls_adapters.cpp
   src/EstimationInterface_node.cpp)
-ament_target_dependencies(EstimationInterface rclcpp std_msgs nav_msgs sensor_msgs geometry_msgs visualization_msgs cf_msgs isas_msgs sfuise_msgs fraunhofer_rtls_flare)
+ament_target_dependencies(EstimationInterface rclcpp std_msgs nav_msgs sensor_msgs geometry_msgs visualization_msgs cf_msgs isas_msgs sfuise_msgs)
 
 add_executable(SplineFusion
   src/SplineFusion.cpp

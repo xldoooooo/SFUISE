@@ -24,21 +24,6 @@ namespace sfuise {
 class CommonUtils {
 public:
     /**
-     * @brief 从 ROS 节点读取参数
-     * @deprecated 使用 ParamUtils::declare() 代替
-     */
-    template <typename T>
-    static T readParam(rclcpp::Node::SharedPtr node, const std::string& name)
-    {
-        T ans;
-        if (!node->get_parameter(name, ans)) {
-            RCLCPP_ERROR_STREAM(node->get_logger(), "Failed to load " << name);
-            rclcpp::shutdown();
-        }
-        return ans;
-    }
-
-    /**
      * @brief 将位姿转换为 ROS PoseStamped 消息
      * @param t 时间戳 (纳秒)
      * @param pos 位置

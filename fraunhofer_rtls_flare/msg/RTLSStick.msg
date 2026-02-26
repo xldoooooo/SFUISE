@@ -1,9 +1,0 @@
-std_msgs/Header header
-uint16 id
-uint32 t
-geometry_msgs/Point pos
-geometry_msgs/Point mean
-geometry_msgs/Vector3 hrp
-uint8 noga
-uint8 nora
-RTLSRange[] ranges

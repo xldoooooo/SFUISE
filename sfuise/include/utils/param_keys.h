@@ -6,7 +6,6 @@ namespace ParamKeys
 namespace EstimationInterface
 {
 constexpr char kIfTdoa[] = "if_tdoa";
-constexpr char kIfFraunhoferMsg[] = "if_fraunhofer_msg";
 constexpr char kTopicImu[] = "topic_imu";
 constexpr char kTopicUwb[] = "topic_uwb";
 constexpr char kTopicAnchorList[] = "topic_anchor_list";

@@ -4,11 +4,6 @@
 
 #include "utils/node_msg_utils.h"
 
-int64_t EstimationInterface::getMsgTimeNs(const std_msgs::msg::Header& header) const
-{
-    return NodeMsgUtils::headerToNs(header);
-}
-
 sensor_msgs::msg::Imu EstimationInterface::normalizeImuMessage(const sensor_msgs::msg::Imu& imu_msg) const
 {
     sensor_msgs::msg::Imu imu_ds_msg;
@@ -38,7 +33,7 @@ void EstimationInterface::appendGtPose(const int64_t t_ns, const Eigen::Quaterni
 
 void EstimationInterface::processToaAndPublish(const isas_msgs::msg::RTLSStick& toa_msg, int64_t& last_uwb)
 {
-    int64_t t_ns = getMsgTimeNs(toa_msg.header);
+    int64_t t_ns = NodeMsgUtils::headerToNs(toa_msg.header);
     if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
         pub_uwb_toa->publish(toa_msg);
         last_uwb = t_ns;
@@ -47,7 +42,7 @@ void EstimationInterface::processToaAndPublish(const isas_msgs::msg::RTLSStick& 
 
 void EstimationInterface::processTdoaAndPublish(const cf_msgs::msg::Tdoa& tdoa_msg, int64_t& last_uwb)
 {
-    int64_t t_ns = getMsgTimeNs(tdoa_msg.header);
+    int64_t t_ns = NodeMsgUtils::headerToNs(tdoa_msg.header);
     if (sampleData(t_ns, last_uwb, uwb_sample_coeff, uwb_frequency)) {
         pub_uwb_tdoa->publish(tdoa_msg);
         last_uwb = t_ns;
