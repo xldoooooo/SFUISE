@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    w_uwb: 3.0
+    reject_uwb_thresh: 0.25

@@ -1,0 +1,23 @@
+ISAS walk config migration
+
+The following duplicated config files were removed:
+- config_test_isas-walk1.yaml
+- config_test_isas-walk2.yaml
+- config_test_isas-walk3.yaml
+
+Use the new layered config setup instead:
+- Base: config_test_isas-base.yaml
+- Walk3 override: config_test_isas-walk3-override.yaml
+
+Launch usage:
+1) Keep compatibility entrypoints:
+   - sfuise_test_isas_walk1.launch.py
+   - sfuise_test_isas_walk2.launch.py
+   - sfuise_test_isas_walk3.launch.py
+
+2) Or use the unified entrypoint:
+   - sfuise_test_isas.launch.py
+     with launch arguments:
+       base_config:=config_test_isas-base.yaml
+       override_config:=config_test_isas-base.yaml (walk1/walk2)
+       override_config:=config_test_isas-walk3-override.yaml (walk3)

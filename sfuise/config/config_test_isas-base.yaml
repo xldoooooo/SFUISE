@@ -9,12 +9,12 @@
     uwb_frequency: 16.0
     imu_frequency: 84.0
 
-    acc_ratio: false 
-    gyro_unit: false 
+    acc_ratio: false
+    gyro_unit: false
     window_size: 100
 
-    uwb_sample_coeff: 1.0 
-    imu_sample_coeff: 1.0 
+    uwb_sample_coeff: 1.0
+    imu_sample_coeff: 1.0
     control_point_fps: 10
 
     max_iter: 5
@@ -23,17 +23,17 @@
 
     accel_var_inv: [7.8483, 7.8483, 7.8483]
     gyro_var_inv: [27.5646, 27.5646, 27.5646]
-    bias_accel_var_inv: [514.9887, 514.9887, 514.9887] 
+    bias_accel_var_inv: [514.9887, 514.9887, 514.9887]
     bias_gyro_var_inv: [2950.6680, 2950.6680, 2950.6680]
 
     w_uwb: 7.0
-    w_accel: 1.0 
-    w_gyro: 1.0 
-    w_bias_accel: 1.0 
+    w_accel: 1.0
+    w_gyro: 1.0
+    w_bias_accel: 1.0
     w_bias_gyro: 1.0
 
     if_reject_uwb: true
-    reject_uwb_thresh: 0.3 
-    reject_uwb_window_width: 0.5 
+    reject_uwb_thresh: 0.3
+    reject_uwb_window_width: 0.5
 
     toa_offset: [-0.0700, 0.1539, -0.0751, 0.1409, -0.0247]
